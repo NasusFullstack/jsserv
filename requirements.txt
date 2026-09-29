@@ -1,2 +1,5 @@
 fastapi>=0.110
 uvicorn[standard]>=0.27
+# 이모티콘을 서버에서 줄여 저장하는 데 씀. 없으면 이모티콘
+# 등록만 안 되고 나머지 기능은 그대로 돈다(features/emoji_convert.py)
+Pillow>=10.0

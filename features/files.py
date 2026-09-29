@@ -30,6 +30,8 @@ import urllib.parse
 import time
 
 from fastapi import APIRouter, Request
+
+from features import emoji_convert
 from fastapi.responses import FileResponse, JSONResponse
 
 NAME = "files"
@@ -49,18 +51,27 @@ ABOUT = "춥채팅 파일·사진 올리기"
 # 옛 이모티콘이 소리 없이 사라지는 것이 더 나쁘기 때문이다.
 LIMITS = {
     # 일반 파일
-    "file_bytes": 100 * 1024 * 1024,        # 파일 하나 최대 100MB
-    "daily_bytes": 500 * 1024 * 1024,       # 한 사람이 하루에 올릴 수 있는 총량
-    "total_bytes": 8 * 1024 * 1024 * 1024,  # 일반 파일 전체 사용량 상한
-    # 이만큼 지난 일반 파일은 지운다. **1일은 일부러 짧게 잡은 것이다** - 남의 서버를
+    "file_bytes": 1024 * 1024 * 1024,         # 파일 하나 최대 1GB
+    "daily_bytes": 1024 * 1024 * 1024,        # 한 사람이 하루에 올릴 수 있는 총량
+    # 남의 서버를 같이 쓰는 처지라 디스크(1TB)를 다 쓰지 않는다
+    "total_bytes": 30 * 1024 * 1024 * 1024,
+    # 이만큼 지난 일반 파일은 지운다. **하루는 일부러 짧게 잡은 것이다** - 남의 서버를
     # 빌려 쓰므로 오래 쌓아두지 않는다. 그래서 어제 올린 사진은 오늘 안 열린다(채팅 기록을
-    # 하루치만 남기는 것과 짝을 맞췄다). 나중에 늘릴 때는 total_bytes도 같이 볼 것
-    "keep_days": 1,
+    # 하루치만 남기는 것과 짝을 맞췄다)
+    "keep_hours": 24,
+    # **큰 파일은 더 짧게.** 1GB짜리 몇 개면 하루 만에 수십 GB가 되므로, 덩치가 크면
+    # 하루도 안 둔다. 큰 파일은 대개 "지금 이것 좀 받아가" 하고 주는 것이라 오래 둘 이유도 없다
+    "big_bytes": 500 * 1024 * 1024,
+    "big_keep_hours": 6,
 
     # 이모티콘(안 지운다)
-    "emoji_bytes": 512 * 1024,              # 하나 최대 512KB(줄여서 올리므로 넉넉)
+    # 줄인 **뒤** 크기의 상한. 이모티콘은 서버가 직접 줄여 저장한다
+    "emoji_bytes": 1024 * 1024,
+    # 줄이기 전에 받아주는 크기. 사람들이 이모티콘으로 삼는 건 대개 사진이나
+    # 스크린샷이라 원본이 크다 - 받아서 줄여주지 않으면 쓸 수가 없다
+    "emoji_source_bytes": 32 * 1024 * 1024,
     "emoji_per_person": 300,                # 한 사람이 저장할 수 있는 개수
-    "emoji_total_bytes": 2 * 1024 * 1024 * 1024,   # 이모티콘 전체 상한
+    "emoji_total_bytes": 10 * 1024 * 1024 * 1024,   # 이모티콘 전체 상한
 }
 
 KIND_FILE = "file"
@@ -140,28 +151,92 @@ def _entries(kind=None):
     return found
 
 
+def keep_seconds(size: int) -> float:
+    """이 크기의 파일을 얼마나 두는가. 덩치가 크면 더 짧게 둔다."""
+    hours = LIMITS["big_keep_hours"] if size > LIMITS["big_bytes"] else LIMITS["keep_hours"]
+    return hours * 3600
+
+
+def _same_path(digest: str) -> str:
+    return os.path.join(STORE_DIR, f"same-{digest}.txt")
+
+
+def _find_same(digest: str) -> str | None:
+    """이 그림과 **똑같은 이모티콘**이 이미 있는가.
+
+    여럿이 같은 짤을 저장하는 건 이모티콘에서 흔한 일이다. 그때마다 따로 쌓으면
+    같은 그림이 사람 수만큼 남는다 - 안 지우는 종류라 그 낭비가 계속 간다.
+    """
+    try:
+        with open(_same_path(digest), encoding="utf-8") as fp:
+            file_id = fp.read().strip()
+    except OSError:
+        return None
+    # 가리키는 것이 사라졌으면 없는 셈 친다(색인이 실제보다 오래 남을 수 있다)
+    if not _ID_OK.match(file_id) or not os.path.exists(_paths(file_id)[0]):
+        return None
+    return file_id
+
+
+def _mark_same(file_id: str, data_path: str):
+    try:
+        with open(data_path, "rb") as fp:
+            digest = hashlib.sha256(fp.read()).hexdigest()[:32]
+        with open(_same_path(digest), "w", encoding="utf-8") as fp:
+            fp.write(file_id)
+    except OSError:
+        pass
+
+
+def _shrink_emoji(file_id: str, data_path: str, name: str):
+    """받은 그림을 이모티콘 크기로 줄여 제자리에 다시 쓴다.
+
+    돌려주는 것은 (바뀐 이름, 바뀐 크기, 이미 있는 것의 id). 그림이 아니면 None.
+    확장자가 바뀔 수 있다(JPG를 넣어도 PNG가 나온다) - 이름을 안 맞추면 브라우저가
+    엉뚱한 것으로 열려고 한다.
+    """
+    try:
+        with open(data_path, "rb") as fp:
+            raw = fp.read()
+    except OSError:
+        return None
+    made = emoji_convert.shrink(raw)
+    if made is None:
+        return None
+    data, suffix = made
+    digest = hashlib.sha256(data).hexdigest()[:32]
+    already = _find_same(digest)
+    if already is not None:
+        return name, len(data), already
+    stem = os.path.splitext(name)[0] or "이모티콘"
+    try:
+        with open(data_path, "wb") as fp:
+            fp.write(data)
+    except OSError:
+        return None
+    return f"{stem}{suffix}", len(data), None
+
+
 def _sweep():
     """오래된 것과 넘치는 것을 치운다. 올릴 때마다 부른다(따로 돌 필요가 없다).
 
     **이모티콘은 건드리지 않는다.** 보관함에 남아 영원히 참조되므로, 기한이 지났다고
     지우면 어느 날 갑자기 깨진다. 이모티콘은 개수·총량으로 막는다(올릴 때 거절).
+
+    **총량이 넘쳐도 여기서 지우지 않는다.** 한때는 넘치면 오래된 것부터 지웠는데, 그러면
+    남이 방금 올린 파일이 내가 올린 것 때문에 소리 없이 사라진다. 지우는 기준은 시간
+    하나뿐이고, 자리가 없으면 **새로 올리는 쪽을 막는다**(올리는 사람은 무슨 일인지 안다).
     """
     entries = _entries(KIND_FILE)
     now = time.time()
-    keep_seconds = LIMITS["keep_days"] * 24 * 3600
-    for file_id, _size, made in list(entries):
-        if now - made > keep_seconds:
+    for file_id, size, made in list(entries):
+        if now - made > keep_seconds(size):
             _remove(file_id)
-    entries = _entries(KIND_FILE)
-    total = sum(size for _i, size, _m in entries)
-    if total <= LIMITS["total_bytes"]:
-        return
-    # 넘치면 **오래된 것부터** 지운다
-    for file_id, size, _made in sorted(entries, key=lambda row: row[2]):
-        _remove(file_id)
-        total -= size
-        if total <= LIMITS["total_bytes"]:
-            break
+
+
+def used_bytes() -> int:
+    """지금 일반 파일이 쓰고 있는 용량."""
+    return sum(size for _i, size, _m in _entries(KIND_FILE))
 
 
 def _remove(file_id: str):
@@ -244,7 +319,14 @@ async def upload(request: Request):
 
     key = _uploader_key(request)
     kind = KIND_EMOJI if request.headers.get("x-file-kind") == KIND_EMOJI else KIND_FILE
-    cap = LIMITS["emoji_bytes"] if kind == KIND_EMOJI else LIMITS["file_bytes"]
+    # 이모티콘은 **받은 뒤 서버가 줄인다.** 그래서 받을 때는 원본 크기로 재고,
+    # 최종 상한(emoji_bytes)은 줄이고 나서 본다
+    cap = LIMITS["emoji_source_bytes"] if kind == KIND_EMOJI else LIMITS["file_bytes"]
+
+    if kind == KIND_EMOJI and not emoji_convert.available():
+        # 그림 라이브러리가 없으면 줄일 수가 없다. 원본을 영영 들고 있느니 안 받는다
+        return JSONResponse({"error": "이 서버는 지금 이모티콘 등록을 할 수 없습니다"},
+                            status_code=503)
 
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > cap:
@@ -262,11 +344,16 @@ async def upload(request: Request):
             return JSONResponse({"error": "이모티콘 보관 공간이 가득 찼습니다"},
                                 status_code=507)
         used = 0
+        stored = 0
     else:
         used = _used_today(key)
         if used >= LIMITS["daily_bytes"]:
             return JSONResponse({"error": "오늘 올릴 수 있는 용량을 다 썼습니다",
                                  "limit": LIMITS["daily_bytes"]}, status_code=429)
+        stored = used_bytes()
+        if stored >= LIMITS["total_bytes"]:
+            return JSONResponse({"error": "서버 저장 공간이 가득 찼습니다",
+                                 "limit": LIMITS["total_bytes"]}, status_code=507)
 
     file_id = secrets.token_hex(12)
     data_path, name_path, kind_path = _paths(file_id)
@@ -278,9 +365,14 @@ async def upload(request: Request):
                 # **받다가 끊는다.** 다 받아놓고 버리면 그 사이에 디스크가 찬다
                 over_daily = (kind == KIND_FILE
                               and used + written > LIMITS["daily_bytes"])
-                if written > cap or over_daily:
+                over_disk = (kind == KIND_FILE
+                             and stored + written > LIMITS["total_bytes"])
+                if written > cap or over_daily or over_disk:
                     out.close()
                     _remove(file_id)
+                    if over_disk:
+                        return JSONResponse({"error": "서버 저장 공간이 가득 찼습니다",
+                                             "limit": LIMITS["total_bytes"]}, status_code=507)
                     return JSONResponse(
                         {"error": "오늘 올릴 수 있는 용량을 넘었습니다" if over_daily
                                   else "파일이 너무 큽니다",
@@ -298,6 +390,22 @@ async def upload(request: Request):
     # **이름은 부호화해서 온다.** HTTP 헤더는 ASCII만 실을 수 있어서 한글 이름을
     # 그대로 넣으면 아예 안 올라간다(실제로 그렇게 막혔다)
     name = safe_name(urllib.parse.unquote(request.headers.get("x-file-name", "")))
+
+    if kind == KIND_EMOJI:
+        shrunk = _shrink_emoji(file_id, data_path, name)
+        if shrunk is None:
+            _remove(file_id)
+            return JSONResponse({"error": "그림이 아니거나 읽을 수 없습니다"}, status_code=400)
+        name, written, same_as = shrunk
+        if same_as is not None:
+            # **이미 누가 등록한 그림이다.** 같은 것을 또 쌓지 않고 그 주소를 그대로 준다 -
+            # 여럿이 같은 짤을 저장하는 게 이모티콘에서는 오히려 흔한 일이다
+            _remove(file_id)
+            return _describe(same_as)
+        if written > LIMITS["emoji_bytes"]:
+            _remove(file_id)
+            return JSONResponse({"error": "줄여도 이모티콘으로 쓰기엔 큽니다"}, status_code=413)
+        _mark_same(file_id, data_path)
     with open(name_path, "w", encoding="utf-8") as fp:
         fp.write(name)
     with open(kind_path, "w", encoding="utf-8") as fp:
@@ -307,11 +415,23 @@ async def upload(request: Request):
     else:
         _add_used(key, written)
 
+    return _describe(file_id)
+
+
+def _describe(file_id: str):
+    """밖에 알려줄 모양 하나로. 새로 저장했든 이미 있던 것이든 같은 답이 나가야 한다."""
+    data_path, name_path, _kind_path = _paths(file_id)
+    try:
+        with open(name_path, encoding="utf-8") as fp:
+            name = fp.read().strip()
+        size = os.path.getsize(data_path)
+    except OSError:
+        return JSONResponse({"error": "저장한 파일을 찾지 못했습니다"}, status_code=500)
     return {
         "id": file_id,
         "name": name,
-        "size": written,
-        "kind": kind,
+        "size": size,
+        "kind": _kind_of(file_id),
         # **주소에도 부호화해서 넣는다.** 이 주소는 채팅 한 줄에 그대로 실려 가는데,
         # 채팅은 공백에서 토큰을 끊으므로 "우리집 사진.png"가 들어가면 링크가 두
         # 조각으로 갈라져 그림이 안 뜬다(실제로 그렇게 깨졌다)
