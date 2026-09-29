@@ -187,8 +187,14 @@ async def battle_ws(websocket: WebSocket):
             room.touched = time.monotonic()
             if kind == bp.START:
                 # 시작은 **방을 연 사람(0번 자리)만** 할 수 있다. 손님이 눌러도 무시한다 -
-                # 아직 고르는 중인 사람을 남이 전투로 끌고 들어갈 수 없게
-                if seat == 0 and not room.started and len(room.seats) >= bp.MIN_PLAYERS:
+                # 아직 고르는 중인 사람을 남이 전투로 끌고 들어갈 수 없게.
+                #
+                # **몇 명부터 시작할 수 있는지는 서버가 정하지 않는다.** 여기서 '2명 이상'을
+                # 요구했더니, 혼자서 연습 상대(AI)와 하려는 사람이 시작을 눌러도 아무 일도
+                # 안 일어났다(실제 신고 2026-09-29). 연습 상대는 그 사람 화면에서만 돌아서
+                # 서버는 그 존재를 모른다 - 알 수도 없는 것을 조건으로 걸면 안 된다.
+                # 누가 들어올 수 있는지(정원)는 서버가, 언제 시작할지는 대기방이 정한다
+                if seat == 0 and not room.started:
                     room.started = True
                     await room.send_others(-1, {"t": bp.STARTED})
             elif kind == bp.INPUT:
