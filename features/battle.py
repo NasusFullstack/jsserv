@@ -44,17 +44,26 @@ class Room:
 
     def __init__(self, room_id: str, cap: int):
         self.id = room_id
-        self.cap = max(bp.MIN_PLAYERS, min(int(cap), bp.MAX_PLAYERS))
+        # 사람 정원. 연습 상대는 따로 센다(자리 번호가 갈려 있다)
+        self.cap = max(bp.MIN_PLAYERS, min(int(cap), bp.MAX_HUMANS))
+        self.bots = 0                        # 방장이 넣은 연습 상대 수
         self.seats: dict[int, dict] = {}     # 자리번호 -> {"nick":.., "color":.., "ws":..}
         self.started = False
         self.touched = time.monotonic()
 
     def free_seat(self) -> int:
-        """비어 있는 가장 작은 자리. 없으면 -1(정원 찼음)."""
+        """비어 있는 가장 작은 **사람** 자리. 없으면 -1(정원 찼음).
+
+        연습 상대 자리(6~11)는 사람이 앉지 않는다 - 방장이 대신 조종할 뿐이다.
+        """
         for seat in range(self.cap):
             if seat not in self.seats:
                 return seat
         return -1
+
+    def bot_slots(self):
+        """연습 상대가 쓰는 자리 번호들."""
+        return list(range(bp.MAX_HUMANS, bp.MAX_HUMANS + self.bots))
 
     def pick_color(self, wanted: int) -> int:
         """원하는 색이 이미 쓰이고 있으면 남은 색 중 하나를 준다.
@@ -153,6 +162,7 @@ async def battle_ws(websocket: WebSocket):
             # **정원은 방을 처음 연 사람만 정한다.** 나중에 들어온 사람이 적어 보낸
             # 값으로 정원이 바뀌면, 먼저 온 사람이 튕겨나가거나 정원이 늘어난다
             room = _rooms[room_id] = Room(room_id, message["cap"])
+            room.bots = message["bots"]     # 연습 상대 수도 방을 연 사람이 정한다
 
         if room.started:
             await _deny(websocket, "이미 시작된 전투입니다")
@@ -173,6 +183,7 @@ async def battle_ws(websocket: WebSocket):
         await websocket.send_text(bp.encode({
             "t": bp.WELCOME, "slot": seat, "tick": 0, "cap": room.cap,
             "color": color, "players": others, "started": room.started,
+            "bots": room.bots,
         }).decode().rstrip("\n"))
         await room.send_others(
             seat, {"t": bp.JOINED, "slot": seat, "nick": nick, "color": color})
@@ -202,6 +213,24 @@ async def battle_ws(websocket: WebSocket):
                 if seat == 0 and not room.started:
                     room.started = True
                     await room.send_others(-1, {"t": bp.STARTED})
+            elif kind in (bp.BOT_INPUT, bp.BOT_HIT, bp.BOT_DEAD):
+                # **연습 상대는 방을 연 사람만 조종한다.** 손님이 보내면 버린다 -
+                # 안 그러면 아무나 남의 화면에서 AI를 조종할 수 있다.
+                # 자리가 정말 AI 자리인지는 규약이 이미 확인했다
+                if seat != 0 or message["slot"] not in room.bot_slots():
+                    continue
+                if kind == bp.BOT_INPUT:
+                    await room.send_others(seat, {
+                        "t": bp.PEER_INPUT, "slot": message["slot"],
+                        "tick": message["tick"], "keys": message["keys"]})
+                elif kind == bp.BOT_HIT:
+                    await room.send_others(seat, {
+                        "t": bp.PEER_HIT, "slot": message["slot"],
+                        "by": message["by"], "hp": message["hp"]})
+                else:
+                    await room.send_others(seat, {
+                        "t": bp.PEER_DEAD, "slot": message["slot"],
+                        "by": message["by"], "hp": message["hp"]})
             elif kind == bp.INPUT:
                 # **자리 번호는 여기서 붙인다** - 보낸 쪽 말을 믿지 않는다
                 await room.send_others(seat, {
