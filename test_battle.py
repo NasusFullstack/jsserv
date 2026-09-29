@@ -159,6 +159,21 @@ with client.websocket_connect("/battle/ws") as host:
 
 battle._rooms.clear()
 
+# ---------- 5-3) 혼자서도 시작할 수 있다 ----------
+# 서버가 '2명 이상'을 요구했더니 혼자서 연습 상대(AI)와 하려는 사람이 시작을 눌러도
+# 아무 일도 안 일어났다(실제 신고). 연습 상대는 그 사람 화면에서만 돌아서 서버는
+# 그 존재를 모른다 - 알 수도 없는 것을 조건으로 걸면 안 된다
+battle._rooms.clear()
+solo = bp.new_room()
+with client.websocket_connect("/battle/ws") as lonely:
+    send(lonely, {"t": "join", "room": solo, "nick": "혼자"})
+    check(f"혼자 들어간다({lonely.receive_json()['slot']}번 자리)", True)
+    send(lonely, {"t": "start"})
+    started_alone = lonely.receive_json()
+    check(f"혼자서도 시작된다({started_alone})", started_alone == {"t": "started"},
+          started_alone)
+battle._rooms.clear()
+
 # ---------- 6) 방 번호를 모르면 못 들어온다 ----------
 with client.websocket_connect("/battle/ws") as x:
     send(x, {"t": "in", "tick": 1, "keys": 1})        # 방부터 말해야 한다
