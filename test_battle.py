@@ -59,14 +59,15 @@ with client.websocket_connect("/battle/ws") as a:
         check(f"남의 자리 번호를 적어 보내도 자기 번호로 바뀐다({relayed})",
               relayed == {"t": "peer", "slot": 1, "tick": 7, "keys": bp.KEY_FIRE}, relayed)
 
-        send(b, {"t": "dead", "by": 0, "slot": 0})
+        send(b, {"t": "dead", "by": 0, "slot": 0, "hp": 0})
         dead = a.receive_json()
         check(f"'죽었다'도 보낸 사람 자리로 기록된다({dead})",
-              dead == {"t": "peerdead", "slot": 1, "by": 0}, dead)
+              dead == {"t": "peerdead", "slot": 1, "by": 0, "hp": 0}, dead)
 
-        send(b, {"t": "hit", "by": 0})
+        send(b, {"t": "hit", "by": 0, "hp": 240})
         hit = a.receive_json()
-        check(f"맞았다도 넘어간다({hit})", hit == {"t": "peerhit", "slot": 1, "by": 0}, hit)
+        check(f"맞았다가 남은 체력과 함께 넘어간다({hit})",
+              hit == {"t": "peerhit", "slot": 1, "by": 0, "hp": 240}, hit)
 
         # ---------- 3) 손님이 서버 노릇을 할 수 없다 ----------
         send(b, {"t": "peer", "slot": 0, "tick": 1, "keys": 15})

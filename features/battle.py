@@ -93,7 +93,12 @@ _rooms: dict[str, Room] = {}
 
 
 def _sweep():
-    """오래 조용한 방을 치운다. 방을 만들 때마다 한 번씩 훑으면 따로 돌 필요가 없다."""
+    """오래 조용한 방과 빈 방을 치운다.
+
+    **누가 들어올 때마다 부른다.** 예전에는 새 방을 만들 때만 불렀는데, 아무도 새
+    방을 안 만들면 잊힌 방이 영영 안 치워졌다(연결이 비정상적으로 끊겨 자리가 남은
+    경우 등). 방 개수가 얼마 안 되므로 들어올 때마다 훑어도 부담이 없다.
+    """
     now = time.monotonic()
     for room_id, room in list(_rooms.items()):
         if not room.seats or now - room.touched > ROOM_IDLE_SEC:
@@ -139,9 +144,9 @@ async def battle_ws(websocket: WebSocket):
             return
 
         room_id = message["room"]
+        _sweep()          # 들어올 때마다 잊힌 방을 치운다(위 설명 참고)
         room = _rooms.get(room_id)
         if room is None:
-            _sweep()
             if len(_rooms) >= MAX_ROOMS:
                 await _deny(websocket, "지금은 방을 더 만들 수 없습니다")
                 return
@@ -205,10 +210,12 @@ async def battle_ws(websocket: WebSocket):
                 })
             elif kind == bp.HIT:
                 await room.send_others(seat, {
-                    "t": bp.PEER_HIT, "slot": seat, "by": message["by"]})
+                    "t": bp.PEER_HIT, "slot": seat,
+                    "by": message["by"], "hp": message["hp"]})
             elif kind == bp.DEAD:
                 await room.send_others(seat, {
-                    "t": bp.PEER_DEAD, "slot": seat, "by": message["by"]})
+                    "t": bp.PEER_DEAD, "slot": seat,
+                    "by": message["by"], "hp": message["hp"]})
             elif kind == bp.BYE:
                 return
 
