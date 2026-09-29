@@ -1,13 +1,12 @@
-"""춥채팅 전투 중계 서버 - 우선 '되는지 확인'만 하는 첫 판.
+"""jsserv - 여러 기능을 함께 얹는 서버.
 
-지금 이 파일이 답해야 하는 질문은 두 개뿐이다.
+**이 서버는 무엇 하나의 전용이 아니다.** 기능마다 자기 경로를 가지고 들어오고, 루트는
+"여기 무엇이 올라와 있는가"만 알려준다. 그래서 기능을 하나 더 붙일 때 이 파일을 거의
+안 건드린다 - `features/` 에 파일 하나 만들고 아래 표에 한 줄 추가하면 끝이다.
 
-1. 배포가 실제로 도는가          -> GET /        (상태를 JSON으로)
-2. WebSocket이 nginx를 통과하는가 -> WS  /ws      (받은 걸 그대로 돌려줌)
-
-2번이 핵심이다. nginx가 `proxy_pass`만 있고 Upgrade 헤더를 안 넘기면 WebSocket이
-막히는데, 그러면 실시간 전투를 다른 방법으로 짜야 한다. 그래서 막혔는지 통과했는지
-**한눈에 알 수 있게** /ws 가 받은 헤더를 그대로 되돌려준다.
+    /                무엇이 올라와 있는지
+    /health          살아있는지
+    /battle/...      춥채팅 배틀크루저 전투 중계 (features/battle.py)
 
 실행 방법을 모르므로 두 가지를 다 받아둔다:
     uvicorn app:app --host 0.0.0.0 --port 8000
@@ -16,66 +15,44 @@
 import datetime
 import os
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-APP_NAME = "chupchat-battle-relay"
-APP_VERSION = "0.1.0"          # 아직 중계는 없음 - 연결 확인용
+from features import battle
 
-app = FastAPI(title=APP_NAME, version=APP_VERSION, docs_url=None, redoc_url=None)
+SERVER_NAME = "jsserv"
+SERVER_VERSION = "0.1.0"
+
+# 무엇이 올라와 있는가 - 기능을 추가하면 여기 한 줄만 늘어난다
+FEATURES = (battle,)
+
+app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, docs_url=None, redoc_url=None)
+
+for feature in FEATURES:
+    app.include_router(feature.router)
 
 
-def _now() -> str:
+def now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
 @app.get("/")
-def root():
-    """배포가 실제로 돌고 있는지 확인하는 자리."""
+def index():
+    """여기 무엇이 올라와 있는지. 기능 목록은 각 기능이 스스로 알려준다."""
     return JSONResponse({
-        "app": APP_NAME,
-        "version": APP_VERSION,
-        "time": _now(),
-        "ws": "/ws",
-        "note": "WebSocket이 되는지 확인하려면 /ws 로 접속해 보세요.",
+        "server": SERVER_NAME,
+        "version": SERVER_VERSION,
+        "time": now(),
+        "features": [
+            {"name": f.NAME, "prefix": f.PREFIX, "about": f.ABOUT, "version": f.VERSION}
+            for f in FEATURES
+        ],
     })
 
 
 @app.get("/health")
 def health():
-    return {"ok": True, "time": _now()}
-
-
-@app.websocket("/ws")
-async def ws_echo(websocket: WebSocket):
-    """받은 글을 그대로 돌려준다.
-
-    붙는 순간 한 줄을 먼저 보내서, **연결만 되고 데이터가 안 오는 상태**와
-    **애초에 연결이 안 된 상태**를 구분할 수 있게 한다(둘 다 '안 된다'로 보이지만
-    원인이 전혀 다르다).
-    """
-    await websocket.accept()
-    client = websocket.client
-    await websocket.send_json({
-        "t": "hello",
-        "app": APP_NAME,
-        "version": APP_VERSION,
-        "time": _now(),
-        # nginx를 거쳐 왔는지, 어떤 헤더가 살아서 왔는지 그대로 보여준다
-        "seen_headers": {
-            key: value for key, value in websocket.headers.items()
-            if key.lower() in ("host", "upgrade", "connection", "origin",
-                               "x-forwarded-for", "x-forwarded-proto",
-                               "sec-websocket-version", "user-agent")
-        },
-        "peer": f"{client.host}:{client.port}" if client else "",
-    })
-    try:
-        while True:
-            text = await websocket.receive_text()
-            await websocket.send_json({"t": "echo", "text": text[:512], "time": _now()})
-    except WebSocketDisconnect:
-        pass
+    return {"ok": True, "time": now()}
 
 
 if __name__ == "__main__":
