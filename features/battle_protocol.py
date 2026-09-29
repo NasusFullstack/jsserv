@@ -10,15 +10,21 @@ import json
 import re
 import secrets
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
-MAX_PLAYERS = 4
+MAX_HUMANS = 6
+MAX_BOTS = 6
+MAX_PLAYERS = MAX_HUMANS + MAX_BOTS
+
+
+def is_bot_slot(slot: int) -> bool:
+    return MAX_HUMANS <= slot < MAX_PLAYERS
 MAX_LINE_BYTES = 512
 MAX_LINES_PER_SEC = 30
 MAX_SESSION_BYTES = 4 * 1024 * 1024
 MAX_NICK_LEN = 24
 MIN_PLAYERS = 2
-COLOR_COUNT = 9        # 마지막은 숨겨진 무지개(계속 바뀌는 색). 서버에겐 그냥 색 하나다
+COLOR_COUNT = 21       # 20가지 + 숨겨진 무지개. 서버에겐 그냥 색 번호다
 
 KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_FIRE = 1, 2, 4, 8, 16
 KEY_MASK = KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN | KEY_FIRE
@@ -32,6 +38,8 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 JOIN, WELCOME, DENY, JOINED, LEFT = "join", "welcome", "deny", "joined", "left"
 START, STARTED = "start", "started"
 INPUT, PEER_INPUT = "in", "peer"
+BOT_INPUT = "botin"
+BOT_HIT, BOT_DEAD = "bothit", "botdead"
 HIT, PEER_HIT = "hit", "peerhit"
 DEAD, PEER_DEAD = "dead", "peerdead"
 BYE = "bye"
@@ -79,13 +87,15 @@ def _check_join(message):
     if not is_room_id(room):
         return None
     color = _as_int(message.get("color"), 0, COLOR_COUNT - 1)
-    cap = _as_int(message.get("cap"), MIN_PLAYERS, MAX_PLAYERS)
+    cap = _as_int(message.get("cap"), MIN_PLAYERS, MAX_HUMANS)
+    bots = _as_int(message.get("bots"), 0, MAX_BOTS)
     return {
         "t": JOIN,
         "room": room.lower(),
         "nick": safe_nick(message.get("nick", "")),
         "color": 0 if color is None else color,
-        "cap": MAX_PLAYERS if cap is None else cap,
+        "cap": MAX_HUMANS if cap is None else cap,
+        "bots": 0 if bots is None else bots,
     }
 
 
@@ -114,6 +124,27 @@ def _own_report(kind):
     return check
 
 
+def _bot_report(kind, with_keys):
+    """방장이 연습 상대 대신 보내는 것 - 여기서는 AI 자리인지만 본다.
+    정말 방장인지는 서버가 판단한다(연결을 아는 건 서버뿐이다)."""
+    def check(message):
+        slot = _as_int(message.get("slot"), 0, MAX_PLAYERS - 1)
+        if slot is None or not is_bot_slot(slot):
+            return None
+        if with_keys:
+            tick = _as_int(message.get("tick"), 0, MAX_TICK)
+            keys = _as_int(message.get("keys"), 0, KEY_MASK)
+            if tick is None or keys is None:
+                return None
+            return {"t": kind, "slot": slot, "tick": tick, "keys": keys}
+        by = _as_int(message.get("by"), 0, MAX_PLAYERS - 1)
+        hp = _as_int(message.get("hp"), 0, MAX_HP)
+        if by is None or hp is None:
+            return None
+        return {"t": kind, "slot": slot, "by": by, "hp": hp}
+    return check
+
+
 def _check_bye(_message):
     return {"t": BYE}
 
@@ -124,6 +155,9 @@ _CHECKERS = {
     JOIN: _check_join,
     START: _check_start,
     INPUT: _check_input,
+    BOT_INPUT: _bot_report(BOT_INPUT, True),
+    BOT_HIT: _bot_report(BOT_HIT, False),
+    BOT_DEAD: _bot_report(BOT_DEAD, False),
     HIT: _own_report(HIT),
     DEAD: _own_report(DEAD),
     BYE: _check_bye,

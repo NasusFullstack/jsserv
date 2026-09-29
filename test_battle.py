@@ -37,7 +37,7 @@ room = bp.new_room()
 
 # ---------- 1) 들어가고 자리를 받는다 ----------
 with client.websocket_connect("/battle/ws") as a:
-    send(a, {"t": "join", "room": room, "nick": "Mong"})
+    send(a, {"t": "join", "room": room, "nick": "Mong", "cap": 4})
     hello = a.receive_json()
     check(f"첫 사람은 0번 자리({hello})",
           hello["t"] == "welcome" and hello["slot"] == 0 and hello["players"] == [], hello)
@@ -98,7 +98,7 @@ with client.websocket_connect("/battle/ws") as a:
                 with client.websocket_connect("/battle/ws") as e:
                     send(e, {"t": "join", "room": room, "nick": "E"})
                     denied = e.receive_json()
-                    check(f"다섯 번째는 거절({denied})",
+                    check(f"정원을 넘으면 거절({denied})",
                           denied["t"] == "deny" and "정원" in denied["why"], denied)
 
                 # ---------- 5-1) 시작은 방장만 ----------
@@ -175,6 +175,49 @@ with client.websocket_connect("/battle/ws") as lonely:
           started_alone)
 battle._rooms.clear()
 
+# ---------- 5-4) 연습 상대는 방장만 조종한다 ----------
+# AI가 모두의 화면에서 똑같이 움직여야 해서, 방장이 계산해 그 결과를 넘긴다.
+# **그 길을 손님에게도 열어주면 아무나 남의 화면에서 AI를 조종할 수 있다.**
+battle._rooms.clear()
+with_bots = bp.new_room()
+with client.websocket_connect("/battle/ws") as boss:
+    send(boss, {"t": "join", "room": with_bots, "nick": "방장", "cap": 2, "bots": 3})
+    hello = boss.receive_json()
+    check(f"연습 상대 수가 돌아온다({hello.get('bots')})", hello.get("bots") == 3, hello)
+
+    with client.websocket_connect("/battle/ws") as visitor:
+        send(visitor, {"t": "join", "room": with_bots, "nick": "손님"})
+        check(f"손님도 연습 상대 수를 안다({visitor.receive_json().get('bots')})", True)
+        boss.receive_json()
+
+        # 방장이 AI를 움직이면 손님에게 그 자리 그대로 간다
+        send(boss, {"t": "botin", "slot": bp.MAX_HUMANS, "tick": 3, "keys": 1})
+        relayed = visitor.receive_json()
+        check(f"방장이 움직인 연습 상대가 그대로 간다({relayed})",
+              relayed == {"t": "peer", "slot": bp.MAX_HUMANS, "tick": 3, "keys": 1}, relayed)
+
+        # 손님이 같은 걸 보내면 무시된다(뒤에 보낸 정상 신호로 확인)
+        send(visitor, {"t": "botin", "slot": bp.MAX_HUMANS, "tick": 4, "keys": 2})
+        send(visitor, {"t": "in", "tick": 9, "keys": 8})
+        after = boss.receive_json()
+        check(f"손님은 연습 상대를 못 움직인다({after})",
+              after == {"t": "peer", "slot": 1, "tick": 9, "keys": 8}, after)
+
+        # 방장이라도 없는 연습 상대 자리는 못 쓴다(3대만 넣었다)
+        send(boss, {"t": "botin", "slot": bp.MAX_HUMANS + 5, "tick": 5, "keys": 1})
+        send(boss, {"t": "in", "tick": 11, "keys": 4})
+        after_bad = visitor.receive_json()
+        check(f"안 넣은 연습 상대 자리는 못 쓴다({after_bad})",
+              after_bad == {"t": "peer", "slot": 0, "tick": 11, "keys": 4}, after_bad)
+
+        # 사람 자리를 AI인 척 조종할 수 없다(규약이 먼저 막는다)
+        send(boss, {"t": "botin", "slot": 1, "tick": 6, "keys": 1})
+        send(boss, {"t": "in", "tick": 12, "keys": 2})
+        after_human = visitor.receive_json()
+        check(f"사람 자리는 대신 못 움직인다({after_human})",
+              after_human == {"t": "peer", "slot": 0, "tick": 12, "keys": 2}, after_human)
+battle._rooms.clear()
+
 # ---------- 6) 방 번호를 모르면 못 들어온다 ----------
 with client.websocket_connect("/battle/ws") as x:
     send(x, {"t": "in", "tick": 1, "keys": 1})        # 방부터 말해야 한다
@@ -193,8 +236,8 @@ check(f"판이 끝나면 방이 남지 않는다(지금 {len(battle._rooms)}개)
 status = client.get("/battle").json()
 check(f"상태에 규약 번호가 있다({status.get('protocol')})",
       status.get("protocol") == bp.PROTOCOL_VERSION, status)
-check(f"정원을 알려준다({status.get('max_players_per_room')})",
-      status.get("max_players_per_room") == 4, status)
+check(f"한 방 최대 인원을 알려준다({status.get('max_players_per_room')})",
+      status.get("max_players_per_room") == bp.MAX_PLAYERS, status)
 
 print("\n전체 통과:", ok)
 sys.exit(0 if ok else 1)
