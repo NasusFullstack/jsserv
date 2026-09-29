@@ -24,6 +24,7 @@ KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_FIRE = 1, 2, 4, 8, 16
 KEY_MASK = KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN | KEY_FIRE
 
 MAX_TICK = 2_000_000
+MAX_HP = 5000             # 보고에 실린 체력이 말이 되는지 보는 상한
 
 _ROOM_OK = re.compile(r"^[0-9a-f]{8,64}$")
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
@@ -101,9 +102,15 @@ def _check_input(message):
 
 
 def _own_report(kind):
+    """'내 배가 당했다' - 남은 체력을 같이 받는다.
+
+    "맞았다"만 보내면 받는 쪽이 얼마나 깎을지 몰라 최대치를 깎는다. 기를 모은 정도에
+    따라 데미지가 달라지므로, 약하게 맞은 배가 남의 화면에서만 죽어 유령이 됐다.
+    """
     def check(message):
         by = _as_int(message.get("by"), 0, MAX_PLAYERS - 1)
-        return None if by is None else {"t": kind, "by": by}
+        hp = _as_int(message.get("hp"), 0, MAX_HP)
+        return None if by is None or hp is None else {"t": kind, "by": by, "hp": hp}
     return check
 
 
