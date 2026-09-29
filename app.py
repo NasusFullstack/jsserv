@@ -18,13 +18,13 @@ import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from features import battle
+from features import battle, files
 
 SERVER_NAME = "jsserv"
 SERVER_VERSION = "0.1.0"
 
 # 무엇이 올라와 있는가 - 기능을 추가하면 여기 한 줄만 늘어난다
-FEATURES = (battle,)
+FEATURES = (battle, files)
 
 app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, docs_url=None, redoc_url=None)
 

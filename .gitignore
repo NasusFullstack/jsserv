@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
+
+# 올린 파일(로컬 저장소)
+uploads/
