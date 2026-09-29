@@ -309,7 +309,10 @@ async def upload(request: Request):
         "name": name,
         "size": written,
         "kind": kind,
-        "url": f"{PREFIX}/{file_id}/{name}",
+        # **주소에도 부호화해서 넣는다.** 이 주소는 채팅 한 줄에 그대로 실려 가는데,
+        # 채팅은 공백에서 토큰을 끊으므로 "우리집 사진.png"가 들어가면 링크가 두
+        # 조각으로 갈라져 그림이 안 뜬다(실제로 그렇게 깨졌다)
+        "url": f"{PREFIX}/{file_id}/{urllib.parse.quote(name)}",
     }
 
 

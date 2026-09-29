@@ -62,6 +62,14 @@ check(f"그림은 화면에 바로 뜬다({got.headers.get('content-type')})",
 check("브라우저가 다른 걸로 해석하지 않게 못 박는다",
       got.headers.get("x-content-type-options") == "nosniff", dict(got.headers))
 
+# 주소는 채팅 한 줄에 그대로 실린다 - 공백이 섞이면 거기서 잘려 링크가 두 조각이 된다
+spaced = put(payload, name="우리집 사진.png")
+spaced_url = spaced.json()["url"]
+check(f"주소에 공백이 없다({spaced_url})", " " not in spaced_url, spaced_url)
+check("한글 이름도 부호화돼 들어간다", "%" in spaced_url, spaced_url)
+check(f"그 주소로 그대로 내려받아진다", client.get(spaced_url).content == payload)
+check("원래 이름은 그대로 알려준다", spaced.json()["name"] == "우리집 사진.png", spaced.json())
+
 # ---------- 2) 위험한 것들 ----------
 evil = put(b"<html><script>alert(1)</script></html>", name="나쁜.html")
 served = client.get(evil.json()["url"])
@@ -88,12 +96,13 @@ files.LIMITS["file_bytes"] = 2048
 try:
     small = put(b"a" * 1000)
     check(f"상한 아래는 통과({small.status_code})", small.status_code == 200)
+    # 개수를 박아두면 앞에서 하나만 더 올려도 깨진다 - "늘지 않았는가"를 본다
+    before = len([n for n in os.listdir(WORK) if n.endswith(".bin")])
     big = put(b"a" * 5000)
     check(f"상한을 넘으면 거절({big.status_code})", big.status_code == 413, big.text[:120])
     check(f"이유를 알려준다({big.json().get('error')})", "큽니다" in big.json().get("error", ""))
-    check("거절된 파일은 안 남는다",
-          len([n for n in os.listdir(WORK) if n.endswith(".bin")]) == 3,
-          os.listdir(WORK))
+    after = len([n for n in os.listdir(WORK) if n.endswith(".bin")])
+    check(f"거절된 파일은 안 남는다({before} -> {after})", after == before, os.listdir(WORK))
 finally:
     files.LIMITS["file_bytes"] = real_cap
 
