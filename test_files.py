@@ -46,6 +46,35 @@ def put(data: bytes, name="사진.png", kind=None):
     return client.post("/files", content=data, headers=headers)
 
 
+# 이모티콘은 **서버가 줄여서** 저장하므로 진짜 그림이어야 한다
+import io as _io  # noqa: E402
+
+from PIL import Image, ImageDraw  # noqa: E402
+
+
+def png(width=40, height=40, color=(200, 30, 30)):
+    out = _io.BytesIO()
+    Image.new("RGB", (width, height), color).save(out, format="PNG")
+    return out.getvalue()
+
+
+def moving_gif(frames=4, size=200):
+    """진짜로 움직이는 GIF.
+
+    단색 그림만 늘어놓으면 Pillow가 한 장으로 합쳐버려서, 움짤을 넣었다고 생각하는데
+    사실은 안 움직이는 그림으로 시험하게 된다(실제로 그렇게 헛검사를 했다).
+    """
+    pages = []
+    for i in range(frames):
+        page = Image.new("RGB", (size, size), (255, 255, 255))
+        ImageDraw.Draw(page).rectangle(
+            [i * size // frames, 10, i * size // frames + 30, size - 10], fill=(200, 20, 20))
+        pages.append(page.convert("P"))
+    out = _io.BytesIO()
+    pages[0].save(out, format="GIF", save_all=True, append_images=pages[1:], duration=80)
+    return out.getvalue()
+
+
 # ---------- 1) 올리고 내려받기 ----------
 payload = b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 20
 response = put(payload)
@@ -70,6 +99,45 @@ check(f"주소에 공백이 없다({spaced_url})", " " not in spaced_url, spaced
 check("한글 이름도 부호화돼 들어간다", "%" in spaced_url, spaced_url)
 check(f"그 주소로 그대로 내려받아진다", client.get(spaced_url).content == payload)
 check("원래 이름은 그대로 알려준다", spaced.json()["name"] == "우리집 사진.png", spaced.json())
+
+# ---------- 1-1) 카드로 보여주려면 알아야 하는 것 ----------
+# 채팅에 뜬 파일 카드는 주소만으로는 이름도 크기도 남은 기간도 모른다
+card = put(b"z" * 4000, name="문서.pdf")
+info2 = card.json()
+check(f"언제까지 받을 수 있는지 알려준다({info2.get('expires', 0) - time.time():.0f}초 남음)",
+      info2.get("expires", 0) > time.time(), info2)
+check("올린 사람에게 내릴 수 있는 표를 준다", len(info2.get("token", "")) >= 16, info2)
+
+seen = client.get(f"/files/{info2['id']}/meta").json()
+check(f"나중에 다시 물어볼 수 있다({seen.get('name')}, {seen.get('size')}바이트)",
+      seen.get("name") == "문서.pdf" and seen.get("size") == 4000, seen)
+check("다시 물을 때는 표를 안 준다(남이 물어볼 수도 있다)", "token" not in seen, seen)
+check("없는 파일을 물으면 404",
+      client.get("/files/000000000000000000000000/meta").status_code == 404)
+
+# 이모티콘은 기한이 없다 - 보관함에서 영원히 참조된다
+forever = put(png(30, 30, (7, 7, 7)), name="계속쓸것.png", kind="emoji").json()
+check(f"이모티콘은 기한이 없다({forever.get('expires')})", forever.get("expires") == 0, forever)
+
+# ---------- 1-2) 올린 것을 도로 내리기 ----------
+check("표가 없으면 못 내린다",
+      client.delete(f"/files/{info2['id']}").status_code == 403)
+check("표가 틀려도 못 내린다",
+      client.delete(f"/files/{info2['id']}",
+                    headers={"X-File-Token": "0" * 32}).status_code == 403)
+check("아직 파일이 있다", client.get(info2["url"]).status_code == 200)
+
+gone = client.delete(f"/files/{info2['id']}", headers={"X-File-Token": info2["token"]})
+check(f"표가 맞으면 내린다({gone.status_code})", gone.status_code == 200, gone.text[:120])
+check("내린 뒤에는 못 받는다", client.get(info2["url"]).status_code == 404)
+check("곁딸린 것도 남지 않는다",
+      not any(n.startswith(info2["id"]) for n in os.listdir(WORK)),
+      [n for n in os.listdir(WORK) if n.startswith(info2["id"])])
+
+# 이모티콘은 같이 쓰는 것이라 한 사람이 내리면 안 된다
+check("이모티콘은 내릴 수 없다(남의 보관함이 깨진다)",
+      client.delete(f"/files/{forever['id']}",
+                    headers={"X-File-Token": "aaaa"}).status_code == 403)
 
 # ---------- 2) 위험한 것들 ----------
 evil = put(b"<html><script>alert(1)</script></html>", name="나쁜.html")
@@ -123,35 +191,6 @@ finally:
     files.LIMITS["daily_bytes"] = real_daily
 
 # ---------- 5) 이모티콘은 다르게 다룬다 ----------
-# 이모티콘은 **서버가 줄여서** 저장하므로 진짜 그림이어야 한다
-import io as _io  # noqa: E402
-
-from PIL import Image, ImageDraw  # noqa: E402
-
-
-def png(width=40, height=40, color=(200, 30, 30)):
-    out = _io.BytesIO()
-    Image.new("RGB", (width, height), color).save(out, format="PNG")
-    return out.getvalue()
-
-
-def moving_gif(frames=4, size=200):
-    """진짜로 움직이는 GIF.
-
-    단색 그림만 늘어놓으면 Pillow가 한 장으로 합쳐버려서, 움짤을 넣었다고 생각하는데
-    사실은 안 움직이는 그림으로 시험하게 된다(실제로 그렇게 헛검사를 했다).
-    """
-    pages = []
-    for i in range(frames):
-        page = Image.new("RGB", (size, size), (255, 255, 255))
-        ImageDraw.Draw(page).rectangle(
-            [i * size // frames, 10, i * size // frames + 30, size - 10], fill=(200, 20, 20))
-        pages.append(page.convert("P"))
-    out = _io.BytesIO()
-    pages[0].save(out, format="GIF", save_all=True, append_images=pages[1:], duration=80)
-    return out.getvalue()
-
-
 # 사람들이 이모티콘으로 삼는 건 대개 큰 사진이다 - 그대로 두면 보이지도 않을 화소를
 # 영원히 들고 있게 된다(이모티콘은 기한으로 안 지운다)
 big_photo = png(2400, 1600)
@@ -170,12 +209,15 @@ check(f"확장자를 실제 저장 형식에 맞춘다({shrunk.json().get('name'
       shrunk.json().get("name", "").endswith(".png"), shrunk.json())
 
 # 같은 짤을 여럿이 저장하는 건 흔한 일이다 - 그때마다 쌓이면 안 지우는 종류라 계속 남는다
+emoji_before = len([n for n in os.listdir(WORK)
+                    if n.endswith(".bin") and files._kind_of(n[:-4]) == "emoji"])
 again = put(big_photo, name="같은사진.png", kind="emoji")
 check("같은 그림을 또 올리면 있던 것을 그대로 준다",
       again.json().get("id") == shrunk.json().get("id"), again.json())
-emoji_files = [n for n in os.listdir(WORK)
-               if n.endswith(".bin") and files._kind_of(n[:-4]) == "emoji"]
-check(f"파일이 두 벌 생기지 않는다({len(emoji_files)}개)", len(emoji_files) == 1, emoji_files)
+emoji_after = len([n for n in os.listdir(WORK)
+                   if n.endswith(".bin") and files._kind_of(n[:-4]) == "emoji"])
+check(f"파일이 두 벌 생기지 않는다({emoji_before} -> {emoji_after})",
+      emoji_after == emoji_before, emoji_after)
 
 # 움직이는 이모티콘을 첫 장으로 납작하게 만들면 쓸 이유가 없어진다
 animated = put(moving_gif(), name="움짤.gif", kind="emoji")

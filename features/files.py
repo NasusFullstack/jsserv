@@ -169,6 +169,34 @@ def keep_seconds(size: int) -> float:
 _GROUP_OK = re.compile(r"^[0-9a-f]{24}$")
 
 
+def _own_path(file_id: str) -> str:
+    return os.path.join(STORE_DIR, f"{file_id}.own")
+
+
+def _own_token(file_id: str) -> str:
+    try:
+        with open(_own_path(file_id), encoding="utf-8") as fp:
+            return fp.read().strip()
+    except OSError:
+        return ""
+
+
+def _make_own_token(file_id: str) -> str:
+    """올린 사람이 도로 내릴 수 있게 주는 표.
+
+    계정이 없는 서버라 "누가 올렸는가"를 물어볼 데가 없다. 올릴 때 표를 하나 주고,
+    그 표를 가진 사람만 지우게 한다. 표를 잃으면 못 지우지만, 어차피 기한이 지나면
+    저절로 사라지므로 큰일은 아니다.
+    """
+    token = secrets.token_hex(16)
+    try:
+        with open(_own_path(file_id), "w", encoding="utf-8") as fp:
+            fp.write(token)
+    except OSError:
+        return ""
+    return token
+
+
 def _group_path(file_id: str) -> str:
     return os.path.join(STORE_DIR, f"{file_id}.group")
 
@@ -285,7 +313,7 @@ def used_bytes() -> int:
 
 def _remove(file_id: str):
     # 곁딸린 것(무리 목록)까지 같이 치운다. 안 그러면 파일은 없는데 목록에만 남는다
-    for path in (*_paths(file_id), _group_path(file_id)):
+    for path in (*_paths(file_id), _group_path(file_id), _own_path(file_id)):
         try:
             os.remove(path)
         except OSError:
@@ -464,7 +492,11 @@ async def upload(request: Request):
     else:
         _add_used(key, written)
 
-    return _describe(file_id)
+    answer = _describe(file_id)
+    if isinstance(answer, dict) and kind == KIND_FILE:
+        # 올린 사람만 내릴 수 있게 표를 하나 준다(이모티콘은 같이 쓰는 것이라 안 준다)
+        answer["token"] = _make_own_token(file_id)
+    return answer
 
 
 def _describe(file_id: str):
@@ -473,14 +505,21 @@ def _describe(file_id: str):
     try:
         with open(name_path, encoding="utf-8") as fp:
             name = fp.read().strip()
-        size = os.path.getsize(data_path)
+        info = os.stat(data_path)
+        size, made = info.st_size, info.st_mtime
     except OSError:
         return JSONResponse({"error": "저장한 파일을 찾지 못했습니다"}, status_code=500)
+    kind = _kind_of(file_id)
+    # **언제까지 받을 수 있는지 같이 알려준다.** 받는 쪽이 이걸 알아야 "3시간 뒤 사라짐"을
+    # 보여줄 수 있다. 이모티콘은 기한이 없다
+    expires = 0.0 if kind == KIND_EMOJI else made + keep_seconds(size)
     return {
         "id": file_id,
         "name": name,
         "size": size,
-        "kind": _kind_of(file_id),
+        "kind": kind,
+        "added": made,
+        "expires": expires,
         # **주소에도 부호화해서 넣는다.** 이 주소는 채팅 한 줄에 그대로 실려 가는데,
         # 채팅은 공백에서 토큰을 끊으므로 "우리집 사진.png"가 들어가면 링크가 두
         # 조각으로 갈라져 그림이 안 뜬다(실제로 그렇게 깨졌다)
@@ -513,6 +552,34 @@ def shared_emoji(group: str = "", limit: int = 300):
     # 최근에 들어온 것이 위로 - 새로 챙긴 이모티콘을 바로 찾을 수 있게
     found.sort(key=lambda item: item["added"], reverse=True)
     return {"emoji": found[:max(1, min(limit, 1000))], "total": len(found)}
+
+
+@router.get("/{file_id}/meta")
+def meta(file_id: str):
+    """그 파일이 아직 있는지, 언제까지 받을 수 있는지.
+
+    채팅에 뜬 파일 카드가 이걸 물어본다 - 주소만으로는 이름도 크기도 알 수 없고,
+    이미 사라진 파일을 받을 수 있는 것처럼 보여주면 안 된다.
+    """
+    if not _ID_OK.match(file_id) or not os.path.exists(_paths(file_id)[0]):
+        return JSONResponse({"error": "없습니다"}, status_code=404)
+    return _describe(file_id)
+
+
+@router.delete("/{file_id}")
+def take_back(file_id: str, request: Request):
+    """올린 사람이 도로 내린다. 표가 맞아야 한다."""
+    if not _ID_OK.match(file_id) or not os.path.exists(_paths(file_id)[0]):
+        return JSONResponse({"error": "없습니다"}, status_code=404)
+    if _kind_of(file_id) == KIND_EMOJI:
+        # 이모티콘은 **같이 쓰는 것**이다. 한 사람이 지우면 남의 보관함이 깨진다
+        return JSONResponse({"error": "이모티콘은 내릴 수 없습니다"}, status_code=403)
+    token = request.headers.get("x-file-token", "").strip()
+    saved = _own_token(file_id)
+    if not saved or not token or not secrets.compare_digest(saved, token):
+        return JSONResponse({"error": "올린 사람만 내릴 수 있습니다"}, status_code=403)
+    _remove(file_id)
+    return {"ok": True}
 
 
 @router.get("/{file_id}/{name}")
