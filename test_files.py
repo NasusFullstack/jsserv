@@ -236,6 +236,62 @@ try:
 finally:
     files.LIMITS["emoji_bytes"] = real_emoji_cap
 
+# ---------- 5-0) 이모티콘은 같이 쓴다 ----------
+# 혼자 쓰려고 저장하는 게 아니라 대화에 쓰려고 저장하는 것이다 - 한 사람이 챙기면
+# 같은 채팅 서버를 쓰는 나머지는 그냥 꺼내 쓰면 된다
+OURS = "1" * 24
+THEIRS = "2" * 24
+
+
+def put_emoji(data, name, group=OURS):
+    headers = {"X-File-Name": urllib.parse.quote(name), "X-File-Kind": "emoji"}
+    if group:
+        headers["X-Emoji-Group"] = group
+    return client.post("/files", content=data, headers=headers)
+
+
+mine = put_emoji(png(50, 50, (9, 9, 200)), "내가챙긴짤.png")
+check(f"무리를 달아 올릴 수 있다({mine.status_code})", mine.status_code == 200, mine.text[:160])
+
+shared = client.get("/files/emoji", params={"group": OURS}).json()
+names = [item["name"] for item in shared["emoji"]]
+check(f"같은 서버 사람이 목록에서 본다({names})", "내가챙긴짤.png" in names, shared)
+check("주소가 같이 온다(바로 쓸 수 있게)",
+      all(item["url"].startswith("/files/") for item in shared["emoji"]), shared)
+
+other = client.get("/files/emoji", params={"group": THEIRS}).json()
+check(f"다른 서버 사람에게는 안 보인다({len(other['emoji'])}개)",
+      "내가챙긴짤.png" not in [i["name"] for i in other["emoji"]], other)
+
+# 같은 그림을 다른 서버 사람이 저장하면 - 파일은 한 벌, 목록은 양쪽에
+same_image = png(50, 50, (9, 9, 200))
+copied = put_emoji(same_image, "쟤네가챙긴짤.png", group=THEIRS)
+check("같은 그림이면 있던 것을 준다", copied.json()["id"] == mine.json()["id"], copied.json())
+check("그래도 다른 서버 목록에도 뜬다",
+      mine.json()["id"] in [i["id"] for i in
+                            client.get("/files/emoji", params={"group": THEIRS}).json()["emoji"]],
+      client.get("/files/emoji", params={"group": THEIRS}).json())
+check("우리 목록에서 사라지지 않는다",
+      mine.json()["id"] in [i["id"] for i in
+                            client.get("/files/emoji", params={"group": OURS}).json()["emoji"]])
+
+# 무리를 안 알려주면 목록에 안 뜬다(그 사람만 쓴다)
+alone = put_emoji(png(51, 51, (1, 90, 90)), "혼자쓸것.png", group="")
+check(f"무리 없이 올린 것은 목록에 안 뜬다({alone.status_code})",
+      alone.status_code == 200
+      and alone.json()["id"] not in
+      [i["id"] for i in client.get("/files/emoji", params={"group": OURS}).json()["emoji"]],
+      alone.json())
+
+check("무리 id가 아니면 거절",
+      client.get("/files/emoji", params={"group": "짧음"}).status_code == 400)
+check("무리를 안 주면 거절", client.get("/files/emoji").status_code == 400)
+
+# 최근에 챙긴 것이 위로 와야 바로 찾는다
+put_emoji(png(52, 52, (200, 200, 9)), "방금챙긴짤.png")
+top = client.get("/files/emoji", params={"group": OURS}).json()["emoji"][0]
+check(f"최근에 챙긴 것이 맨 위({top['name']})", top["name"] == "방금챙긴짤.png", top)
+
 # ---------- 5-1) 큰 파일은 더 짧게 둔다 ----------
 # 1GB짜리 몇 개면 하루 만에 수십 GB가 된다
 check(f"보통 파일은 하루({files.keep_seconds(1000) / 3600:.0f}시간)",
