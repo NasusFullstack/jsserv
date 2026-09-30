@@ -499,6 +499,27 @@ async def upload(request: Request):
     return answer
 
 
+# 그림 파일이 앞머리에 갖고 있는 표시들. 내용으로 그림인지 가리는 데 쓴다
+_IMAGE_MARKS = (
+    # 바이트 값을 그대로 적는다 - 이스케이프(\x89 같은 것)를 쓰면 이 파일을 고치는
+    # 도구를 한 번 잘못 거칠 때 진짜 제어문자로 바뀌어 파일이 통째로 깨진다(겪었다)
+    (bytes([0x89]) + b"PNG" + bytes([0x0D, 0x0A, 0x1A, 0x0A]), 0),
+    (bytes([0xFF, 0xD8, 0xFF]), 0),          # JPEG
+    (b"GIF87a", 0), (b"GIF89a", 0),
+    (b"BM", 0),                              # BMP
+    (b"WEBP", 8),                            # RIFF....WEBP
+)
+
+
+def _looks_like_image(path: str) -> bool:
+    try:
+        with open(path, "rb") as fp:
+            head = fp.read(16)
+    except OSError:
+        return False
+    return any(head[at:at + len(mark)] == mark for mark, at in _IMAGE_MARKS)
+
+
 def _describe(file_id: str):
     """밖에 알려줄 모양 하나로. 새로 저장했든 이미 있던 것이든 같은 답이 나가야 한다."""
     data_path, name_path, _kind_path = _paths(file_id)
@@ -510,6 +531,10 @@ def _describe(file_id: str):
     except OSError:
         return JSONResponse({"error": "저장한 파일을 찾지 못했습니다"}, status_code=500)
     kind = _kind_of(file_id)
+    # **그림인지는 내용으로 판단한다.** 확장자는 거짓말을 한다 - 이름이 .dat여도 사진일
+    # 수 있고, .png인데 사진이 아닐 수도 있다. 받는 쪽은 이 답을 보고 미리보기를 띄울지
+    # 파일 카드를 그릴지 정한다
+    looks_image = _looks_like_image(data_path)
     # **언제까지 받을 수 있는지 같이 알려준다.** 받는 쪽이 이걸 알아야 "3시간 뒤 사라짐"을
     # 보여줄 수 있다. 이모티콘은 기한이 없다
     expires = 0.0 if kind == KIND_EMOJI else made + keep_seconds(size)
@@ -520,6 +545,7 @@ def _describe(file_id: str):
         "kind": kind,
         "added": made,
         "expires": expires,
+        "image": looks_image,
         # **주소에도 부호화해서 넣는다.** 이 주소는 채팅 한 줄에 그대로 실려 가는데,
         # 채팅은 공백에서 토큰을 끊으므로 "우리집 사진.png"가 들어가면 링크가 두
         # 조각으로 갈라져 그림이 안 뜬다(실제로 그렇게 깨졌다)

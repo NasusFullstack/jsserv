@@ -112,6 +112,14 @@ seen = client.get(f"/files/{info2['id']}/meta").json()
 check(f"나중에 다시 물어볼 수 있다({seen.get('name')}, {seen.get('size')}바이트)",
       seen.get("name") == "문서.pdf" and seen.get("size") == 4000, seen)
 check("다시 물을 때는 표를 안 준다(남이 물어볼 수도 있다)", "token" not in seen, seen)
+# **확장자가 아니라 내용으로 가린다.** 이름이 .dat여도 사진이면 사진으로 보여줘야 한다
+disguised = put(png(40, 40, (3, 3, 3)), name="이름은아무거나.dat").json()
+check(f"이름이 거짓말해도 그림인 걸 알아본다({disguised.get('image')})",
+      disguised.get("image") is True, disguised)
+lying = put('PK 이건 압축파일이다'.encode('utf-8') * 20, name='사진인척.png').json()
+check(f"그림 확장자를 달아도 내용이 아니면 그림이 아니다({lying.get('image')})",
+      lying.get("image") is False, lying)
+
 check("없는 파일을 물으면 404",
       client.get("/files/000000000000000000000000/meta").status_code == 404)
 
