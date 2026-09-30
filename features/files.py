@@ -19,6 +19,15 @@
   저장 이름은 서버가 만든 난수고, 원래 이름은 내려줄 때만 쓴다
 - HTML/스크립트로 열리지 않게 내려준다. 그림만 화면에 바로 뜨고 나머지는 내려받기다
   (남의 파일이 우리 주소에서 페이지로 실행되면 안 된다)
+
+## 이모티콘은 같이 쓴다
+누가 이모티콘을 저장하면 **같은 채팅 서버를 쓰는 사람들이 다 쓸 수 있다.** 혼자 쓰려고
+저장하는 게 아니라 대화에 쓰려고 저장하는 것이므로, 한 사람이 챙겨두면 나머지는 그냥
+꺼내 쓰면 된다.
+
+무리(group)는 클라이언트가 (프로토콜, 호스트, 포트)를 해시해 만든 24자다. 그래서
+**다른 서버를 쓰는 사람들 것이 섞이지 않고**, 빌려 쓰는 서버에 우리가 어디에 접속하는지
+적히지도 않는다. 무리를 안 알려주고 올린 이모티콘은 목록에 안 뜬다(그 사람만 쓴다).
 """
 import datetime
 import hashlib
@@ -157,6 +166,41 @@ def keep_seconds(size: int) -> float:
     return hours * 3600
 
 
+_GROUP_OK = re.compile(r"^[0-9a-f]{24}$")
+
+
+def _group_path(file_id: str) -> str:
+    return os.path.join(STORE_DIR, f"{file_id}.group")
+
+
+def groups_of(file_id: str) -> list[str]:
+    """이 이모티콘이 어느 무리들에 걸려 있는가."""
+    try:
+        with open(_group_path(file_id), encoding="utf-8") as fp:
+            return [line.strip() for line in fp if _GROUP_OK.match(line.strip())]
+    except OSError:
+        return []
+
+
+def add_group(file_id: str, group: str):
+    """이 이모티콘을 그 무리 목록에 올린다.
+
+    같은 그림을 다른 서버 사람이 저장하면 파일은 한 벌만 두고 **무리만 하나 더 단다.**
+    그래야 양쪽 목록에 다 뜨면서도 디스크는 한 번만 쓴다.
+    """
+    if not group or not _GROUP_OK.match(group):
+        return
+    groups = groups_of(file_id)
+    if group in groups:
+        return
+    groups.append(group)
+    try:
+        with open(_group_path(file_id), "w", encoding="utf-8") as fp:
+            fp.write("\n".join(groups))
+    except OSError:
+        pass
+
+
 def _same_path(digest: str) -> str:
     return os.path.join(STORE_DIR, f"same-{digest}.txt")
 
@@ -240,7 +284,8 @@ def used_bytes() -> int:
 
 
 def _remove(file_id: str):
-    for path in _paths(file_id):
+    # 곁딸린 것(무리 목록)까지 같이 치운다. 안 그러면 파일은 없는데 목록에만 남는다
+    for path in (*_paths(file_id), _group_path(file_id)):
         try:
             os.remove(path)
         except OSError:
@@ -397,15 +442,19 @@ async def upload(request: Request):
             _remove(file_id)
             return JSONResponse({"error": "그림이 아니거나 읽을 수 없습니다"}, status_code=400)
         name, written, same_as = shrunk
+        group = request.headers.get("x-emoji-group", "").strip()
         if same_as is not None:
             # **이미 누가 등록한 그림이다.** 같은 것을 또 쌓지 않고 그 주소를 그대로 준다 -
-            # 여럿이 같은 짤을 저장하는 게 이모티콘에서는 오히려 흔한 일이다
+            # 여럿이 같은 짤을 저장하는 게 이모티콘에서는 오히려 흔한 일이다.
+            # 다만 무리는 달아준다(다른 서버 사람이 저장했으면 그쪽 목록에도 떠야 한다)
             _remove(file_id)
+            add_group(same_as, group)
             return _describe(same_as)
         if written > LIMITS["emoji_bytes"]:
             _remove(file_id)
             return JSONResponse({"error": "줄여도 이모티콘으로 쓰기엔 큽니다"}, status_code=413)
         _mark_same(file_id, data_path)
+        add_group(file_id, group)
     with open(name_path, "w", encoding="utf-8") as fp:
         fp.write(name)
     with open(kind_path, "w", encoding="utf-8") as fp:
@@ -437,6 +486,33 @@ def _describe(file_id: str):
         # 조각으로 갈라져 그림이 안 뜬다(실제로 그렇게 깨졌다)
         "url": f"{PREFIX}/{file_id}/{urllib.parse.quote(name)}",
     }
+
+
+@router.get("/emoji")
+def shared_emoji(group: str = "", limit: int = 300):
+    """그 무리가 같이 쓰는 이모티콘 목록.
+
+    **주소를 아는 사람은 누구나 볼 수 있다.** 무리 id가 곧 열쇠인데, 그건 채팅 서버
+    주소를 아는 사람이면 계산할 수 있는 값이다 - 즉 같은 채팅방에 들어올 수 있는 사람과
+    같은 범위다. 그보다 더 감출 방법은 계정 없이는 없다.
+    """
+    if not _GROUP_OK.match(group or ""):
+        return JSONResponse({"error": "무리 id가 올바르지 않습니다"}, status_code=400)
+    found = []
+    for file_id, size, made in _entries(KIND_EMOJI):
+        if group not in groups_of(file_id):
+            continue
+        _data_path, name_path, _kind_path = _paths(file_id)
+        try:
+            with open(name_path, encoding="utf-8") as fp:
+                name = fp.read().strip()
+        except OSError:
+            continue
+        found.append({"id": file_id, "name": name, "size": size, "added": made,
+                      "url": f"{PREFIX}/{file_id}/{urllib.parse.quote(name)}"})
+    # 최근에 들어온 것이 위로 - 새로 챙긴 이모티콘을 바로 찾을 수 있게
+    found.sort(key=lambda item: item["added"], reverse=True)
+    return {"emoji": found[:max(1, min(limit, 1000))], "total": len(found)}
 
 
 @router.get("/{file_id}/{name}")
