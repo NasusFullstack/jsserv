@@ -19,6 +19,15 @@
 있다. 다만 표를 영원히 붙들지는 않는다 - 컴퓨터를 바꾸면 표가 없어지므로, 한동안
 아무도 안 고친 자리는 다시 잡을 수 있게 풀어준다(claim_days).
 
+## 무슨 프로그램을 쓰는지도 여기 둔다
+"저 사람은 춥채팅인가 WeeChat인가"를 알아내려고 지금까지는 IRC 로 CTCP VERSION 을
+물어봤다. 그런데 서버마다 그걸 폭주로 보고 거절하고(UnrealIRCd: "Multi-target
+messaging is not allowed"), 상대 화면에 요청이 찍히고, 다리 봇은 엉뚱한 답을 한다.
+
+프로필을 올릴 때 **자기가 무엇인지 같이 적으면** 그 셋이 전부 사라진다. 아무에게도
+묻지 않고, 참여자 목록을 받을 때 이미 하는 lookup 한 번으로 같이 온다.
+IRC 로 묻는 길은 코드에 그대로 남겨두고 꺼둔다 - 우리 서버를 못 쓸 때 쓸 수 있다.
+
 ## 자리 이름은 서버에 안 알린다
 who는 클라이언트가 (프로토콜, 호스트, 포트, 닉네임)을 해시해서 만든 24자다. 빌려 쓰는
 서버에 누가 어느 채팅방을 쓰는지 적히지 않고, 서버가 달라도 같은 닉네임이 안 섞인다.
@@ -35,7 +44,9 @@ from fastapi.responses import JSONResponse
 
 NAME = "profiles"
 PREFIX = "/profiles"
-VERSION = "1.0.0"
+# 1.1.0: 무슨 프로그램을 쓰는지(client)를 같이 보관한다. 클라이언트가 이 번호를 보고
+# "이 서버가 그걸 알려주는가"를 판단할 수 있게 올린다
+VERSION = "1.1.0"
 ABOUT = "춥채팅 참여자 프로필(아이콘)"
 
 # ---- 한도 (나중에 여기 숫자만 고치면 된다) ---------------------------------
@@ -48,7 +59,13 @@ LIMITS = {
     "max_profiles": 20000,
     "daily_writes": 200,    # 한 사람이 하루에 고칠 수 있는 횟수
     "batch_size": 60,       # 한 번에 물어볼 수 있는 사람 수
+    "app_chars": 32,        # 프로그램 이름 길이
+    "version_chars": 24,
 }
+
+# 어느 자리에서 쓰는 것인지. 아는 것만 받는다 - 모르는 글자를 그대로 쥐고 있다가
+# 화면에 뿌리면 남이 적어 보낸 글이 남의 화면에 뜨는 길이 된다
+PLATFORMS = ("pc", "mobile", "web", "cli")
 
 STORE_DIR = os.environ.get("JSSERV_PROFILE_DIR",
                            os.path.join(os.path.dirname(os.path.dirname(
@@ -131,6 +148,7 @@ def can_write(saved: dict | None, token: str, now: float | None = None) -> bool:
 def _public(saved: dict) -> dict:
     """밖으로 내보낼 부분만. **표(token)는 절대 안 내보낸다.**"""
     return {"nick": saved.get("nick", ""), "avatar": saved.get("avatar", ""),
+            "client": saved.get("client", {}),
             "updated": saved.get("updated", 0)}
 
 
@@ -185,6 +203,30 @@ def clean_avatar(avatar) -> str | None:
     return avatar
 
 
+def clean_client(raw):
+    """'나는 무슨 프로그램인가'를 믿을 수 있는 모양으로. 아니면 None.
+
+    글자를 그대로 믿지 않는다. 이 값은 남의 화면에 배지로 뜨므로, 아무나 아무 글자를
+    적어 보낼 수 있으면 그게 곧 남의 화면에 글을 쓰는 길이 된다.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        return None
+    app = str(raw.get("app", ""))[:LIMITS["app_chars"]]
+    version = str(raw.get("version", ""))[:LIMITS["version_chars"]]
+    platform = str(raw.get("platform", ""))
+    if app and not re.fullmatch(r"[A-Za-z0-9 ._-]+", app):
+        return None
+    if version and not re.fullmatch(r"[0-9A-Za-z.+-]+", version):
+        return None
+    if platform and platform not in PLATFORMS:
+        return None
+    if not app:
+        return {}
+    return {"app": app, "version": version, "platform": platform}
+
+
 # ------------------------------------------------------------------ 창구
 @router.get("")
 def status():
@@ -209,7 +251,9 @@ async def put_profile(who: str, request: Request):
     avatar = clean_avatar(body.get("avatar"))
     if avatar is None:
         return JSONResponse({"error": "아이콘이 너무 크거나 그림이 아닙니다"}, status_code=413)
-    nick = str(body.get("nick", ""))[:LIMITS["nick_chars"]]
+    client = clean_client(body.get("client"))
+    if client is None:
+        return JSONResponse({"error": "프로그램 정보가 올바르지 않습니다"}, status_code=400)
 
     key = _writer_key(request)
     if _used_today(key) >= LIMITS["daily_writes"]:
@@ -225,7 +269,19 @@ async def put_profile(who: str, request: Request):
     keep_token = (saved or {}).get("token") if (saved and token
                                                 and saved.get("token") == token) else None
     new_token = keep_token or token or secrets.token_hex(16)
-    _write_profile(who, {"nick": nick, "avatar": avatar,
+
+    # **안 보낸 칸은 건드리지 않는다.** 모바일은 아이콘 편집기가 없어서 "나는 춥채팅
+    # 모바일"만 올리는데, 빈 아이콘으로 덮어쓰면 그 사람이 PC에서 정해둔 얼굴이
+    # 서버에서 지워진다(같은 닉네임이면 같은 자리다)
+    before = saved or {}
+    nick = (str(body["nick"])[:LIMITS["nick_chars"]] if "nick" in body
+            else before.get("nick", ""))
+    if "avatar" not in body:
+        avatar = before.get("avatar", "")
+    if "client" not in body:
+        client = before.get("client", {})
+
+    _write_profile(who, {"nick": nick, "avatar": avatar, "client": client,
                          "token": new_token, "updated": time.time()})
     _add_used(key, 1)
     return {"ok": True, "token": new_token}

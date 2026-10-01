@@ -132,6 +132,46 @@ try:
 finally:
     profiles.LIMITS["daily_writes"] = real
 
+# ---------- 9) 무슨 프로그램을 쓰는지 ----------
+# IRC 로 물어보던 것을 서버에 적는 방식으로 바꿨다. 아무에게도 안 묻고 lookup 한 번에
+# 같이 온다 - 다만 이 값은 **남의 화면에 배지로 뜨므로** 아무 글자나 받으면 안 된다
+WHO9 = "9" * 24
+first9 = put(WHO9, nick="폰사람", avatar="AAAA",
+             client={"app": "ChupChat", "version": "2.6.6", "platform": "mobile"})
+TOKEN9 = first9.json()["token"]
+seen = client.get(f"/profiles/{WHO9}").json()
+check("무슨 프로그램인지 같이 돌려준다",
+      seen.get("client", {}).get("platform") == "mobile", seen)
+check("프로그램 이름과 버전도 그대로",
+      (seen["client"]["app"], seen["client"]["version"]) == ("ChupChat", "2.6.6"), seen)
+
+bad = put(WHO9, token=TOKEN9, client={"app": "<script>", "version": "1.0",
+                                      "platform": "pc"})
+check(f"이상한 이름은 거절({bad.status_code})", bad.status_code == 400, bad.text[:160])
+
+bad = put(WHO9, token=TOKEN9, client={"app": "ChupChat", "version": "1.0",
+                                      "platform": "냉장고"})
+check(f"모르는 자리는 거절({bad.status_code})", bad.status_code == 400, bad.text[:160])
+
+# **안 보낸 칸은 건드리지 않는다** - 모바일은 아이콘 편집기가 없어서 "나는 춥채팅
+# 모바일"만 올린다. 그때 빈 아이콘으로 덮어쓰면 PC에서 정해둔 얼굴이 지워진다
+again = client.put(f"/profiles/{WHO9}", content=json.dumps(
+    {"token": TOKEN9,
+     "client": {"app": "ChupChat", "version": "2.6.7", "platform": "mobile"}}))
+check(f"표를 내면 고칠 수 있다({again.status_code})", again.status_code == 200,
+      again.text[:160])
+after = client.get(f"/profiles/{WHO9}").json()
+check("아이콘을 안 보내면 그대로 남는다", after.get("avatar") == "AAAA", after)
+check("이름도 그대로 남는다", after.get("nick") == "폰사람", after)
+check("버전만 바뀐다", after["client"]["version"] == "2.6.7", after)
+
+# 반대로 아이콘만 바꿀 때 프로그램 정보가 사라지면 안 된다
+client.put(f"/profiles/{WHO9}",
+           content=json.dumps({"token": TOKEN9, "avatar": "BBBB"}))
+after = client.get(f"/profiles/{WHO9}").json()
+check("아이콘만 바꿔도 프로그램 정보가 남는다",
+      after["client"].get("platform") == "mobile", after)
+
 check("서버가 이 기능을 알려준다",
       any(f["name"] == "profiles" for f in client.get("/").json()["features"]),
       client.get("/").json()["features"])
