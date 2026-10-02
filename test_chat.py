@@ -108,6 +108,22 @@ check("비밀번호를 평문으로 안 적는다",
 check("아이디·비밀번호가 맞아야 들어온다",
       chat.check_login("mong22", "비밀1234") and not chat.check_login("mong22", "틀림"))
 
+# ---------- 1-2) 가입은 WebSocket 으로도 된다 ----------
+# 연결 하나로 가입과 로그인을 다 할 수 있어야 한다 - 가입만 HTTP 로 두면 클라이언트가
+# 두 가지 길을 알아야 하고, 둘의 판단이 갈라질 자리가 생긴다
+with client.websocket_connect("/chat/ws") as ws:
+    send(ws, {"cmd": "register", "id": "sejong", "pw": "비밀1234"})
+    made = one(ws)
+    check("WebSocket 으로 가입된다", made.get("ok") is True and made.get("made") is True,
+          made)
+    send(ws, {"cmd": "register", "id": "sejong", "pw": "비밀1234"})
+    check("이미 있는 아이디는 그쪽에서도 거절", one(ws).get("ok") is False)
+    check("가입 뒤 바로 로그인된다", login(ws, "sejong").get("ok") is True)
+    # HTTP 로 만든 계정과 같은 판단인가 - 규칙이 두 벌로 갈라지면 안 된다
+    send(ws, {"cmd": "register", "id": "한글", "pw": "비밀1234"})
+    check("아이디 규칙이 HTTP 와 같다", one(ws).get("ok") is False)
+
+
 # ---------- 2) 들어가서 이야기한다 ----------
 with client.websocket_connect("/chat/ws") as a:
     check("로그인하면 자리를 받는다", login(a, "mong22").get("ok") is True)

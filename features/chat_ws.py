@@ -62,6 +62,19 @@ def members_of(channel: str) -> list:
     return out
 
 
+async def do_register(s: Session, body: dict) -> dict:
+    """계정을 만든다. **연결 하나로 가입과 로그인을 다 할 수 있게** 여기도 둔다 -
+    가입만 HTTP 로 두면 클라이언트가 두 가지 길을 알아야 한다.
+
+    판단은 chat.make_account 하나가 한다(HTTP 창구와 같은 규칙).
+    """
+    code, answer = c.make_account(body.get("id"), body.get("pw"))
+    if code != 200:
+        return {"type": "auth_result", "ok": False, "text": answer.get("error", "실패"),
+                "made": False}
+    return {"type": "auth_result", "ok": True, "made": True, "id": answer["id"]}
+
+
 async def do_login(s: Session, body: dict) -> dict:
     user_id = body.get("id")
     if not c.check_login(user_id, body.get("pw")):
@@ -200,6 +213,7 @@ async def do_set_avatar(s: Session, body: dict) -> dict:
 NEED_LOGIN = {"join", "leave", "msg", "whisper", "set_nickname", "set_avatar"}
 
 HANDLERS = {
+    "register": do_register,
     "login": do_login,
     "join": do_join,
     "leave": do_leave,

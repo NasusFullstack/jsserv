@@ -35,7 +35,12 @@ from fastapi.responses import JSONResponse
 
 NAME = "chat"
 PREFIX = "/chat"
-VERSION = "1.0.0"
+# 1.1.0 - WebSocket 으로도 가입할 수 있다(연결 하나로 가입+로그인).
+#         올릴 때마다 손대야 하는 이유: 클라이언트가 "이 서버가 그걸 할 수
+#         있나"를 **물어볼 수 있어야** 한다. 모르는 명령은 조용히 버리도록
+#         되어 있어서(구버전이 죽지 않게), 안 올리면 새 클라이언트가 옛 서버에
+#         붙었을 때 아무 답도 없이 멎는다 - 실제로 그렇게 겪었다
+VERSION = "1.1.0"
 ABOUT = "춥채팅 서버 채팅(IRC 없이)"
 
 # ---- 한도 -------------------------------------------------------------------
@@ -250,21 +255,31 @@ async def register(request: Request):
     if not isinstance(payload, dict):
         return JSONResponse({"error": "읽을 수 없는 내용입니다"}, status_code=400)
 
-    user_id = payload.get("id")
-    password = payload.get("pw")
+    code, answer = make_account(payload.get("id"), payload.get("pw"))
+    if code != 200:
+        return JSONResponse(answer, status_code=code)
+    return answer
+
+
+def make_account(user_id, password):
+    """계정을 만든다. (상태코드, 답) 을 돌려준다.
+
+    HTTP 와 WebSocket 이 **같은 판단**을 쓰게 하려고 따로 뺐다 - 두 군데에 같은 규칙을
+    적어두면 한쪽만 고치는 일이 반드시 생긴다.
+    """
     if not is_id(user_id):
-        return JSONResponse({"error": "아이디는 영문·숫자 2~24자입니다"}, status_code=400)
+        return 400, {"error": "아이디는 영문·숫자 2~24자입니다"}
     if not isinstance(password, str) or not 4 <= len(password) <= LIMITS["password_chars"]:
-        return JSONResponse({"error": "비밀번호는 4자 이상입니다"}, status_code=400)
+        return 400, {"error": "비밀번호는 4자 이상입니다"}
 
     users = load_users()
     if user_id in users:
-        return JSONResponse({"error": "이미 쓰고 있는 아이디입니다"}, status_code=409)
+        return 409, {"error": "이미 쓰고 있는 아이디입니다"}
     digest, salt = hash_password(password)
     users[user_id] = {"pw": digest, "salt": salt, "nick": user_id,
                       "avatar": "", "made": time.time()}
     save_users(users)
-    return {"ok": True, "id": user_id}
+    return 200, {"ok": True, "id": user_id}
 
 
 def check_login(user_id, password) -> bool:
