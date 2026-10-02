@@ -124,6 +124,36 @@ with client.websocket_connect("/chat/ws") as ws:
     check("아이디 규칙이 HTTP 와 같다", one(ws).get("ok") is False)
 
 
+# ---------- 1-3) 살아 있는지 물어볼 수 있다 ----------
+# 없으면 조용한 연결을 클라이언트가 죽은 것으로 보고 스스로 끊는다(실측: PC 가 170초마다)
+with client.websocket_connect("/chat/ws") as ws:
+    send(ws, {"cmd": "ping"})
+    answer = one(ws)
+    check("ping 에 pong 으로 답한다", answer.get("type") == "pong", answer)
+    check("로그인 전에도 답한다(살아 있는지 묻는 데 자격이 필요 없다)",
+          answer.get("ts", 0) > 0, answer)
+
+# ---------- 1-4) 어떤 방이 있는지 보고 고른다 ----------
+with client.websocket_connect("/chat/ws") as ws:
+    login(ws, "mong22")
+    join(ws, "목록검사")
+    send(ws, {"cmd": "join", "channel": "잠긴방", "key": "열쇠"})
+    one(ws)                      # 입장 응답
+    one(ws)                      # 내 입장으로 생긴 참여자 목록
+    send(ws, {"cmd": "channels"})
+    listed = one(ws)
+    names = [one_room["name"] for one_room in listed.get("channels", [])]
+    check("방 목록을 준다", listed.get("type") == "channel_list", listed)
+    check("만들어진 방이 다 보인다", "목록검사" in names and "잠긴방" in names, names)
+    rooms = {one_room["name"]: one_room for one_room in listed["channels"]}
+    check("몇 명 있는지 같이 온다", rooms["목록검사"]["users"] == 1, rooms["목록검사"])
+    check("비밀번호가 걸렸는지 알려준다", rooms["잠긴방"]["locked"] is True, rooms["잠긴방"])
+    check("**비밀번호 자체는 안 보낸다**",
+          all("key" not in one_room for one_room in listed["channels"]),
+          listed["channels"])
+    check("사람이 있는 방이 위로 온다",
+          listed["channels"][0]["users"] >= listed["channels"][-1]["users"])
+
 # ---------- 2) 들어가서 이야기한다 ----------
 with client.websocket_connect("/chat/ws") as a:
     check("로그인하면 자리를 받는다", login(a, "mong22").get("ok") is True)

@@ -209,10 +209,41 @@ async def do_set_avatar(s: Session, body: dict) -> dict:
     return {"type": "member_avatar", "id": s.user_id, "avatar": avatar}
 
 
+async def do_ping(s: Session, body: dict) -> dict:
+    """살아 있나. **답이 있어야 한다** - 없으면 클라이언트가 조용한 연결을 죽은 것으로
+    보고 스스로 끊는다(실측 2026-10-02: PC 가 170초마다 그랬다).
+
+    로그인 전에도 답한다 - 살아 있는지 묻는 데 자격이 필요할 이유가 없다.
+    """
+    return {"type": "pong", "ts": time.time()}
+
+
+async def do_channels(s: Session, body: dict) -> dict:
+    """서버에 있는 방을 전부 알려준다 - 들어갈 방을 **보고 고를 수 있게**.
+
+    사람이 안 들어가 있는 방도 보여준다(방은 서버에 남아 있고 기록도 하루치 남는다).
+    비밀번호가 걸린 방은 **그 사실만** 알려준다 - 비밀번호 자체는 절대 안 보낸다.
+    """
+    channels = c.load_channels()
+    out = []
+    for name, room in channels.items():
+        out.append({
+            "name": name,
+            "users": len(c.hub.room(name).members),
+            "made": room.get("made", 0),
+            "locked": bool(room.get("key")),
+        })
+    # 사람이 있는 방부터, 그 다음은 이름순 - 들어갈 만한 곳이 위로 온다
+    out.sort(key=lambda one: (-one["users"], one["name"]))
+    return {"type": "channel_list", "channels": out}
+
+
 # 로그인해야 쓸 수 있는 명령들
 NEED_LOGIN = {"join", "leave", "msg", "whisper", "set_nickname", "set_avatar"}
 
 HANDLERS = {
+    "ping": do_ping,
+    "channels": do_channels,
     "register": do_register,
     "login": do_login,
     "join": do_join,
