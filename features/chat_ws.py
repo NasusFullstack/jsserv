@@ -76,8 +76,10 @@ async def do_register(s: Session, body: dict) -> dict:
 
 
 async def do_login(s: Session, body: dict) -> dict:
-    user_id = body.get("id")
-    if not c.check_login(user_id, body.get("pw")):
+    # **저장된 아이디로 바꿔 쓴다.** 대소문자를 안 가리므로 사람이 친 것과 다를 수
+    # 있는데, 다른 사람 화면에는 처음 적은 그대로 보여야 한다
+    user_id = c.check_login(body.get("id"), body.get("pw"))
+    if user_id is None:
         return {"type": "auth_result", "ok": False, "text": "아이디나 비밀번호가 다릅니다"}
     # 한 아이디로 두 군데서 들어오면 **먼저 있던 쪽을 내보낸다.** 둘 다 두면 같은
     # 사람이 두 번 보이고, 귓속말을 누구에게 보낼지도 갈린다
