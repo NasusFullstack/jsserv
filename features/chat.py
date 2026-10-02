@@ -35,6 +35,10 @@ from fastapi.responses import JSONResponse
 
 NAME = "chat"
 PREFIX = "/chat"
+# 1.3.0 - 계정이 **저장소 밖에** 쌓인다. 안에 두면 배포할 때 지워진다(실측
+#         2026-10-02: 버전 두 번 올리는 동안 그 전 계정이 전부 날아갔다).
+#       - 아이디의 **대소문자를 안 가린다**. IRC 버릇대로 쳤다가 "있는 아이디인데
+#         로그인이 안 된다"가 됐다
 # 1.2.0 - ping 에 pong 으로 답한다. 조용한 연결이 살아 있는지 **클라이언트가 물어볼
 #         수 있어야** 한다 - 없으면 조용하다는 이유로 스스로 끊고 다시 붙는다
 #         (실측 2026-10-02: PC 가 170초마다 그랬다. 소켓은 멀쩡했다).
@@ -44,7 +48,7 @@ PREFIX = "/chat"
 #         있나"를 **물어볼 수 있어야** 한다. 모르는 명령은 조용히 버리도록
 #         되어 있어서(구버전이 죽지 않게), 안 올리면 새 클라이언트가 옛 서버에
 #         붙었을 때 아무 답도 없이 멎는다 - 실제로 그렇게 겪었다
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 ABOUT = "춥채팅 서버 채팅(IRC 없이)"
 
 # ---- 한도 -------------------------------------------------------------------
@@ -63,9 +67,60 @@ LIMITS = {
     "lines_per_sec": 10,       # 한 연결이 초당 보낼 수 있는 줄
 }
 
-STORE_DIR = os.environ.get(
-    "JSSERV_CHAT_DIR",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "chat"))
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_LEGACY_DIR = os.path.join(_HERE, "chat")
+
+
+def _store_dir() -> str:
+    """계정과 방이 쌓이는 자리.
+
+    **저장소 폴더 안에 두면 안 된다.** 배포하면 지워진다 - 실측(2026-10-02): 버전을
+    두 번 올리는 동안 그 전에 만든 계정이 전부 사라졌다("있는 아이디인데 로그인이
+    안 된다"는 신고로 드러났다). 다른 기능들은 환경 변수로 바깥을 가리키고 있는데
+    (JSSERV_FILE_DIR 등) 채팅은 새로 생긴 거라 그 설정이 없었다.
+
+    그래서 **설정이 없어도** 코드와 따로 사는 자리를 고른다 - 집 폴더 아래.
+    환경 변수를 주면 그쪽이 이긴다(다른 기능들과 같은 자리에 모으고 싶을 때).
+    """
+    chosen = os.environ.get("JSSERV_CHAT_DIR")
+    if chosen:
+        return chosen
+    home = os.path.expanduser("~")
+    if home and os.path.isdir(home) and os.access(home, os.W_OK):
+        return os.path.join(home, ".jsserv", "chat")
+    # 집 폴더를 못 쓰는 환경이면 어쩔 수 없이 옛 자리(배포 때 지워질 수 있다)
+    return _LEGACY_DIR
+
+
+STORE_DIR = _store_dir()
+
+
+def _carry_over_once() -> None:
+    """옛 자리에 있던 것을 새 자리로 한 번 옮긴다.
+
+    자리를 바꾸면서 그냥 두면, 이미 만들어 둔 계정이 **없는 것처럼** 보인다.
+    새 자리에 이미 뭔가 있으면 건드리지 않는다.
+    """
+    if STORE_DIR == _LEGACY_DIR or not os.path.isdir(_LEGACY_DIR):
+        return
+    if os.path.exists(os.path.join(STORE_DIR, "users.json")):
+        return
+    import shutil
+    try:
+        os.makedirs(STORE_DIR, exist_ok=True)
+        for entry in os.listdir(_LEGACY_DIR):
+            source = os.path.join(_LEGACY_DIR, entry)
+            target = os.path.join(STORE_DIR, entry)
+            if os.path.exists(target):
+                continue
+            (shutil.copytree if os.path.isdir(source) else shutil.copy2)(
+                source, target)
+    except OSError:
+        # 못 옮겨도 서버는 떠야 한다. 계정을 다시 만들면 된다
+        pass
+
+
+_carry_over_once()
 
 # 아이디는 로그인 식별자라 영문·숫자로 묶는다(헷갈리는 이름으로 남을 사칭하지 못하게).
 # **표시 이름(nick)은 한글도 된다** - IRC 에서 못 하던 것이 이것이다
@@ -265,19 +320,55 @@ async def register(request: Request):
     return answer
 
 
+def clean_id(value) -> str:
+    """사람이 친 아이디를 다듬는다 - **앞뒤 공백을 지운다.**
+
+    폰 자판은 글자 뒤에 공백을 잘 붙인다. 그대로 두면 눈에 안 보이는 한 칸 때문에
+    "있는 아이디인데 로그인이 안 된다"가 된다.
+    """
+    return value.strip() if isinstance(value, str) else ""
+
+
+def find_account(users: dict, user_id) -> tuple:
+    """적힌 아이디를 찾는다. **대소문자를 안 가린다.**
+
+    IRC 는 이름의 대소문자를 안 가려서 사람들이 그 버릇으로 친다. 가렸더니
+    "있는 아이디인데 로그인이 안 된다"가 됐다(실측 2026-10-02: Case43F4DF 로
+    만들고 case43f4df 로 들어가려다 거절).
+
+    돌려주는 것은 (저장된 아이디, 그 내용). 없으면 (None, None).
+    저장된 쪽을 돌려주는 이유: 화면에 보이는 이름을 **처음 적은 그대로** 두려고 -
+    안 그러면 같은 사람이 Mong 과 mong 으로 갈려 보인다.
+    """
+    typed = clean_id(user_id)
+    if not typed:
+        return None, None
+    saved = users.get(typed)
+    if saved is not None:
+        return typed, saved
+    lowered = typed.lower()
+    for key, value in users.items():
+        if key.lower() == lowered:
+            return key, value
+    return None, None
+
+
 def make_account(user_id, password):
     """계정을 만든다. (상태코드, 답) 을 돌려준다.
 
     HTTP 와 WebSocket 이 **같은 판단**을 쓰게 하려고 따로 뺐다 - 두 군데에 같은 규칙을
     적어두면 한쪽만 고치는 일이 반드시 생긴다.
     """
+    user_id = clean_id(user_id)
     if not is_id(user_id):
         return 400, {"error": "아이디는 영문·숫자 2~24자입니다"}
     if not isinstance(password, str) or not 4 <= len(password) <= LIMITS["password_chars"]:
         return 400, {"error": "비밀번호는 4자 이상입니다"}
 
     users = load_users()
-    if user_id in users:
+    # **대소문자만 다른 아이디도 같은 것으로 본다.** 안 그러면 Mong 과 mong 이
+    # 따로 생겨서, 둘 중 누가 누군지 화면에서 구분할 수 없다
+    if find_account(users, user_id)[0] is not None:
         return 409, {"error": "이미 쓰고 있는 아이디입니다"}
     digest, salt = hash_password(password)
     users[user_id] = {"pw": digest, "salt": salt, "nick": user_id,
@@ -286,14 +377,19 @@ def make_account(user_id, password):
     return 200, {"ok": True, "id": user_id}
 
 
-def check_login(user_id, password) -> bool:
-    if not is_id(user_id) or not isinstance(password, str):
-        return False
-    saved = load_users().get(user_id)
+def check_login(user_id, password):
+    """맞으면 **저장된 아이디**를, 아니면 None 을 돌려준다.
+
+    참/거짓이 아니라 아이디를 돌려주는 이유: 대소문자를 안 가리므로 사람이 친 것과
+    저장된 것이 다를 수 있다. 다른 사람들 화면에는 **처음 적은 그대로** 보여야 한다.
+    """
+    if not is_id(clean_id(user_id)) or not isinstance(password, str):
+        return None
+    key, saved = find_account(load_users(), user_id)
     if saved is None:
-        return False
+        return None
     digest, _ = hash_password(password, saved.get("salt", ""))
-    return secrets.compare_digest(digest, saved.get("pw", ""))
+    return key if secrets.compare_digest(digest, saved.get("pw", "")) else None
 
 
 @router.websocket("/ws")

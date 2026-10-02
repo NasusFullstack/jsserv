@@ -106,7 +106,31 @@ check("비밀번호를 평문으로 안 적는다",
       bool(saved.get("pw")) and "비밀1234" not in json.dumps(saved, ensure_ascii=False),
       saved)
 check("아이디·비밀번호가 맞아야 들어온다",
-      chat.check_login("mong22", "비밀1234") and not chat.check_login("mong22", "틀림"))
+      chat.check_login("mong22", "비밀1234") == "mong22"
+      and chat.check_login("mong22", "틀림") is None)
+
+# ---------- 1-1) 아이디는 **대소문자를 안 가린다** ----------
+# IRC 는 이름의 대소문자를 안 가려서 사람들이 그 버릇으로 친다. 가렸더니
+# "있는 아이디인데 로그인이 안 된다"가 됐다(실측 2026-10-02)
+register("Sejong2")
+check("대소문자가 달라도 들어온다",
+      chat.check_login("sejong2", "비밀1234") == "Sejong2",
+      chat.check_login("sejong2", "비밀1234"))
+check("**처음 적은 그대로**를 돌려준다(화면에 Mong 과 mong 으로 갈려 보이면 안 된다)",
+      chat.check_login("SEJONG2", "비밀1234") == "Sejong2")
+check("대소문자만 다른 아이디는 또 못 만든다",
+      register("SEJONG2").status_code == 409, register("sejong2").status_code)
+check("앞뒤 공백은 지우고 본다", chat.check_login(" Sejong2 ", "비밀1234") == "Sejong2")
+
+# ---------- 1-2) 쌓이는 자리가 **저장소 밖**이다 ----------
+# 안에 두면 배포할 때 지워진다 - 그 전에 만든 계정이 전부 날아갔다
+import os.path as _p  # noqa: E402
+_repo = _p.dirname(_p.abspath(chat.__file__))
+check("계정이 저장소 폴더 안에 쌓이지 않는다",
+      not _p.abspath(chat.STORE_DIR).startswith(_p.abspath(_p.dirname(_repo)) + _p.sep)
+      or _p.basename(chat.STORE_DIR) != "chat"
+      or "JSSERV_CHAT_DIR" in os.environ,
+      chat.STORE_DIR)
 
 # ---------- 1-2) 가입은 WebSocket 으로도 된다 ----------
 # 연결 하나로 가입과 로그인을 다 할 수 있어야 한다 - 가입만 HTTP 로 두면 클라이언트가
