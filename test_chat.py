@@ -254,6 +254,15 @@ with client.websocket_connect("/chat/ws") as a:
         whispered = one(a)
         check("귓속말이 간다", whispered.get("text") == "둘만 아는 얘기", whispered)
 
+        # 로그인은 대소문자를 안 가리는데 귓속말만 가리면, 같은 이름을 쳤는데 어떤
+        # 때는 가고 어떤 때는 안 가는 것으로 보인다
+        send(a, {"cmd": "whisper", "to": "DURI", "text": "대문자로 불러본다"})
+        one(a)                   # 보낸 사람 화면에도 남는다(먼저 읽는 이유는 위와 같다)
+        reached = one(b)
+        check("귓속말도 대소문자를 안 가린다",
+              reached.get("type") == "whisper"
+              and reached.get("text") == "대문자로 불러본다", reached)
+
 # ---------- 5) 남의 것을 못 건드린다 ----------
 with client.websocket_connect("/chat/ws") as a:
     send(a, {"cmd": "msg", "channel": "일반", "text": "몰래"})

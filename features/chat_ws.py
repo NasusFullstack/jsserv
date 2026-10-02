@@ -165,10 +165,15 @@ async def do_msg(s: Session, body: dict):
 
 async def do_whisper(s: Session, body: dict):
     """귓속말. **IRC 에서는 기록도 알림도 안 되던 것이다.**"""
-    to = body.get("to")
+    # 받는 사람도 **대소문자를 안 가린다.** 로그인은 안 가리는데 귓속말만 가리면,
+    # 같은 이름을 쳤는데 어떤 때는 가고 어떤 때는 안 가는 것으로 보인다
+    to = c.clean_id(body.get("to"))
     text = c.clean_text(body.get("text"), c.LIMITS["text_chars"])
     if not c.is_id(to) or not text:
         return err("보낼 사람과 내용이 필요합니다")
+    found, _ = c.find_account(c.load_users(), to)
+    if found is not None:
+        to = found
     line = {"id": secrets.token_hex(8), "ts": time.time(),
             "sender": s.user_id, "to": to, "text": text}
     sent = await c.hub.tell_one(to, {"type": "whisper", **line})
