@@ -14,6 +14,7 @@ TestClient 는 연결마다 다른 이벤트 루프에서 앱을 돌려서, 남�
 그래서 **서버가 보내는 순서를 알고 그만큼만 읽는다.** 대신 올 줄이 없으면 영원히
 기다리게 되므로, 감시자를 두고 정해진 시간이 지나면 그 사실을 말하고 끝낸다.
 """
+import io
 import json
 import os
 import shutil
@@ -27,7 +28,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import app  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+
+from features import chat  # noqa: E402
+
+# **검사는 서버에 얹혀 있는지와 상관없이 돈다.** 서버에서 꺼둔 동안에도 채팅 코드가
+# 멀쩡한지 확인할 수 있어야 한다 - 꺼뒀다고 검사까지 빨개지면, 되살릴 때 뭐가
+# 성한지 알 수 없다
+app = FastAPI()
+app.include_router(chat.router)
 from features import chat  # noqa: E402
 
 client = TestClient(app)
@@ -300,8 +309,19 @@ with client.websocket_connect("/chat/ws") as a:
     check("나갔다 와도 지난 이야기가 그대로 있다", "안녕하세요" in texts, texts[:4])
     check("다른 채널 이야기는 안 섞인다", "왔어요" not in texts, texts[:4])
 
-check("서버가 이 기능을 알려준다",
-      any(f["name"] == "chat" for f in client.get("/").json()["features"]))
+# **기능이 스스로를 알려주는가**(서버 루트가 아니라 여기를 본다).
+# 루트를 보면 "지금 얹혀 있는가"를 묻게 되는데, 그건 app.py 가 정하는 일이고
+# 꺼둘 수도 있다(2026-10-06 현재 꺼둠). 그때도 이 검사는 돌아야 한다
+told = client.get("/chat").json()
+check("기능이 스스로를 알려준다", told.get("feature") == "chat", told)
+check("몇 번째 판인지도 알려준다(클라이언트가 할 수 있는 일을 물어본다)",
+      told.get("version", "").count(".") == 2, told.get("version"))
+
+# 얹을지 말지는 app.py 한 곳에서 정한다 - 되살릴 때 두 군데를 고치지 않게
+with io.open("app.py", encoding="utf-8") as fp:
+    served = fp.read()
+check("얹는 자리는 app.py 의 FEATURES 한 곳뿐",
+      served.count("FEATURES = (") == 1, served.count("FEATURES = ("))
 
 shutil.rmtree(WORK, ignore_errors=True)
 

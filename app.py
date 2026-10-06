@@ -7,7 +7,7 @@
     /                무엇이 올라와 있는지
     /health          살아있는지
     /battle/...      춥채팅 배틀크루저 전투 중계 (features/battle.py)
-    /chat/...        춥채팅 서버 채팅 - IRC 없이 (features/chat.py)
+    /chat/...        춥채팅 서버 채팅 - **지금은 꺼둠**(아래 FEATURES 참고)
     /files/...       춥채팅 파일·사진 올리기 (features/files.py)
     /logs/...        춥채팅 채팅 기록 하루치 (features/logs.py)
     /profiles/...    춥채팅 참여자 프로필 (features/profiles.py)
@@ -23,13 +23,25 @@ import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from features import battle, chat, files, game, logs, profiles
+# chat 은 지금 안 얹지만 **import 는 남겨둔다** - 되살릴 때 FEATURES 한 곳만
+# 고치면 되게(두 군데를 고쳐야 하면 한쪽을 빠뜨린다)
+from features import battle, chat, files, game, logs, profiles  # noqa: F401
 
 SERVER_NAME = "jsserv"
 SERVER_VERSION = "0.1.0"
 
-# 무엇이 올라와 있는가 - 기능을 추가하면 여기 한 줄만 늘어난다
-FEATURES = (battle, chat, files, logs, profiles, game)
+# 무엇이 올라와 있는가 - 기능을 추가하면 여기 한 줄만 늘어난다.
+#
+# **서버 채팅(chat)은 지금 꺼져 있다**(2026-10-06, 사용자 요청 - 당분간 안 쓰므로
+# 메모리를 비워둔다). 코드는 그대로 있고 얹지만 않는다.
+#
+#   되살리는 법: 아래 줄에 `chat,` 을 도로 넣고 올리면 끝이다. 계정과 방은
+#   `~/.jsserv/chat` 에 그대로 있다(chat 1.3.0 부터 저장소 밖에 쌓는다).
+#
+#   끄면 같이 사라지는 것: /chat 과 /chat/ws. 춥채팅 앱의 "춥채팅 서버" 쪽이
+#   안 붙는다 - IRC 쪽은 우리 서버를 안 거치므로 그대로 된다. 파일·프로필·기록·
+#   전투는 따로 돌아가므로 영향 없다.
+FEATURES = (battle, files, logs, profiles, game)
 
 app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, docs_url=None, redoc_url=None)
 
