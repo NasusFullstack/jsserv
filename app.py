@@ -11,6 +11,7 @@
     /files/...       춥채팅 파일·사진 올리기 (features/files.py)
     /logs/...        춥채팅 채팅 기록 하루치 (features/logs.py)
     /profiles/...    춥채팅 참여자 프로필 (features/profiles.py)
+    /game/...        웹 게임 탄막게임 (features/game.py, 파일은 static/game/)
 
 실행 방법을 모르므로 두 가지를 다 받아둔다:
     uvicorn app:app --host 0.0.0.0 --port 8000
@@ -22,13 +23,13 @@ import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from features import battle, chat, files, logs, profiles
+from features import battle, chat, files, game, logs, profiles
 
 SERVER_NAME = "jsserv"
 SERVER_VERSION = "0.1.0"
 
 # 무엇이 올라와 있는가 - 기능을 추가하면 여기 한 줄만 늘어난다
-FEATURES = (battle, chat, files, logs, profiles)
+FEATURES = (battle, chat, files, logs, profiles, game)
 
 app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, docs_url=None, redoc_url=None)
 

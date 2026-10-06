@@ -10,6 +10,7 @@
 | `GET /health` | 살아있는지 |
 | `/battle/…` | 춥채팅 배틀크루저 전투 중계 |
 | `/chat/…` | 춥채팅 서버 채팅 — IRC 없이 |
+| `/game/…` | 웹 게임 올려두기 — 게임 파일은 저장소 밖, 열쇠로 직접 올림 |
 
 ## 기능 추가하기
 
@@ -64,6 +65,19 @@ WS   /chat/ws         채팅
 proxy_set_header Upgrade $http_upgrade;
 proxy_set_header Connection "upgrade";
 ```
+
+## game — 웹 게임 올려두기
+
+브라우저에서 하는 웹 게임을 `/game/` 주소로 내려준다. **게임 파일은 이 저장소에 없다**(저장소가
+공개라서). 게임을 만드는 사람이 열쇠(토큰)로 서버에 직접 올리고, 서버는 집 폴더
+`~/.jsserv/game`에 둔다. 그래서 게임을 고칠 때 이 저장소를 고치거나 재배포할 필요가 없다.
+
+```
+GET  /game/          게임 첫 화면
+POST /game/upload    게임 통째로 바꾸기 (본문 zip, 헤더 X-Game-Token)
+```
+
+코드에는 열쇠의 SHA-256 지문만 있다. 열쇠를 바꾸려면 환경 변수 `JSSERV_GAME_TOKEN_SHA256`.
 
 ## 실행
 
