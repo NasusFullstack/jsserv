@@ -69,13 +69,19 @@ proxy_set_header Connection "upgrade";
 ## game — 웹 게임 올려두기
 
 브라우저에서 하는 웹 게임을 `/game/` 주소로 내려준다. **게임 파일은 이 저장소에 없다**(저장소가
-공개라서). 게임을 만드는 사람이 열쇠(토큰)로 서버에 직접 올리고, 서버는 집 폴더
-`~/.jsserv/game`에 둔다. 그래서 게임을 고칠 때 이 저장소를 고치거나 재배포할 필요가 없다.
+공개라서). 게임을 만드는 사람이 열쇠(토큰)로 서버에 직접 올리고, 서버는 영구 보존 폴더
+`/data/jsserv/game`에 둔다(`/data`가 없으면 집 폴더 `~/.jsserv/game`). 그래서 게임을 고칠 때 이 저장소를
+고치거나 재배포할 필요가 없고, 배포해도 지워지지 않는다.
 
 ```
-GET  /game/          게임 첫 화면
-POST /game/upload    게임 통째로 바꾸기 (본문 zip, 헤더 X-Game-Token)
+GET  /game/                  게임 첫 화면
+POST /game/upload            게임 통째로 바꾸기 (본문 zip, 헤더 X-Game-Token)
+GET  /game/originals/index   (열쇠) 보관 중인 원본 목록
+POST /game/originals         (열쇠) 원본 그림 보관 — 바뀐 것만 올림, 옛 판은 _history 에 누적
 ```
+
+게임에는 용량을 줄인 그림을 올리고 원본은 `/data/jsserv/game_originals`에 따로 쌓는다(공개 안 함).
+그림 주소에 `?v=지문`이 붙으면 7일 캐시한다(내용이 바뀌면 지문이 바뀌어 새로 받음).
 
 코드에는 열쇠의 SHA-256 지문만 있다. 열쇠를 바꾸려면 환경 변수 `JSSERV_GAME_TOKEN_SHA256`.
 

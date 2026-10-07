@@ -91,6 +91,49 @@ check("바꿔 끼우고 남은 임시 폴더가 없다", sorted(os.listdir(WORK)
 r = client.get("/")
 check("루트에 game 기능이 보인다", "game" in [f["name"] for f in r.json()["features"]])
 
+# ---- 그림 캐시: ?v=지문 이 붙으면 오래, 없으면 잠깐 ----
+upload(make_zip(GAME))
+r = client.get("/game/assets/chars/idle.png")
+check("지문 없는 그림은 잠깐만 캐시", r.headers.get("cache-control") == "public, max-age=600", r.headers.get("cache-control"))
+r = client.get("/game/assets/chars/idle.png?v=ab12cd34")
+check("지문(?v=) 붙은 그림은 7일 캐시", "max-age=604800" in r.headers.get("cache-control", ""), r.headers.get("cache-control"))
+r = client.get("/game/js/game.js?v=1")
+check("스크립트는 지문이 있어도 캐시 안 함", r.headers.get("cache-control") == "no-cache", r.headers.get("cache-control"))
+
+# ---- 원본 보관: 열쇠 필요, 공개 안 됨, 누적(옛 판은 _history) ----
+ORIG = os.path.join(WORK, "game_originals")
+
+
+def orig_up(files, token=TOKEN):
+    return client.post("/game/originals", content=make_zip(files), headers={"X-Game-Token": token} if token else {})
+
+
+r = orig_up({"art_inbox/c03/ref_sheet.png": b"PNG-v1"}, token=None)
+check("원본도 열쇠 없이는 못 올린다", r.status_code == 403, r.status_code)
+r = client.get("/game/originals/index")
+check("원본 목록도 열쇠 없이는 못 본다", r.status_code == 403, r.status_code)
+r = orig_up({"art_inbox/../../evil.png": b"x"})
+check("원본: ../ 경로는 거절", r.status_code == 400, r.status_code)
+r = orig_up({"_history/x.png": b"x"})
+check("원본: _history 에 직접 못 쓴다", r.status_code == 400, r.status_code)
+r = orig_up({"art_inbox/a.exe": b"x"})
+check("원본: 정해 둔 종류만", r.status_code == 400, r.status_code)
+r = orig_up({"art_inbox/c03/ref_sheet.png": b"PNG-v1", "assets/chars/c03/idle.png": b"IDLE"})
+check("원본이 올라간다", r.status_code == 200 and r.json().get("added") == 2, r.text)
+r = client.get("/game/originals/index", headers={"X-Game-Token": TOKEN})
+idx = r.json().get("files", {})
+check("원본 목록에 지문이 나온다", idx.get("art_inbox/c03/ref_sheet.png") == hashlib.sha1(b"PNG-v1").hexdigest(), idx)
+r = orig_up({"art_inbox/c03/ref_sheet.png": b"PNG-v2", "assets/chars/c03/idle.png": b"IDLE"})
+check("바뀐 것은 교체, 같은 것은 그대로", r.status_code == 200 and r.json().get("replaced") == 1 and r.json().get("unchanged") == 1, r.text)
+hist_dir = os.path.join(ORIG, "_history", "art_inbox", "c03")
+hist = os.listdir(hist_dir) if os.path.isdir(hist_dir) else []
+check("옛 판은 _history 에 남는다(누적)", len(hist) == 1 and open(os.path.join(hist_dir, hist[0]), "rb").read() == b"PNG-v1", hist)
+r = client.get("/game/originals/index", headers={"X-Game-Token": TOKEN})
+check("목록에 _history 는 안 나온다", all(not k.startswith("_history") for k in r.json()["files"]), r.json())
+r = client.get("/game/../game_originals/art_inbox/c03/ref_sheet.png")
+check("원본은 게임 주소로 못 받는다", r.status_code == 404 or b"PNG-v2" not in r.content, r.status_code)
+check("원본 올리기가 임시 zip 을 남기지 않는다", not [f for f in os.listdir(ORIG) if f.startswith(".orig-")], os.listdir(ORIG))
+
 shutil.rmtree(WORK, ignore_errors=True)
 bad = [c for c in checks if not c[1]]
 for name, passed, detail in checks:
