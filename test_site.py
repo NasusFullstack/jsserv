@@ -64,6 +64,9 @@ def today():
     return client.get("/api/overview").json()["stats"]["today"]
 
 
+r = visit("/w/chupchat", ip="1.0.0.1")
+check("처음 받은 요청이 작품 주소여도 열린다(기본 작품을 먼저 깐다)", r.status_code == 200, r.status_code)
+
 # 가짜 GitHub 릴리스
 releases.fetch = lambda repo: {
     "tag": "v2.7.1", "name": "", "url": "https://github.com/%s/releases/tag/v2.7.1" % repo, "published": "2026-10-01T00:00:00Z",

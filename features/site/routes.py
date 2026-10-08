@@ -97,6 +97,14 @@ def _works():
     return service.sort_works(store.works())
 
 
+def _public(slug):
+    """밖에서 찾는 작품 하나 (숨긴 것은 없는 셈). 처음이면 기본 작품부터 깐다."""
+    if not service.SLUG_RE.match(slug):
+        return None
+    w = next((w for w in _works() if w.get("slug") == slug), None)
+    return None if not w or w.get("hidden") else w
+
+
 async def _read_body(request, limit):
     """본문을 limit 까지만 받는다. 넘으면 None (다 받아 놓고 버리지 않게 받다가 끊는다)."""
     if int(request.headers.get("content-length") or 0) > limit:
@@ -164,8 +172,8 @@ def home_page():
 
 @router.get("/w/{slug}")
 def work_page(slug: str):
-    w = store.work(slug) if service.SLUG_RE.match(slug) else None
-    if not w or w.get("hidden"):
+    w = _public(slug)
+    if not w:
         return RedirectResponse("/", status_code=307)
     site = _settings().get("name") or ""
     return _page("index.html", title="%s · %s" % (w.get("title", slug), site), desc=w.get("tagline"),
@@ -237,10 +245,10 @@ def media(slug: str, name: str):
 
 @router.get("/dl/{slug}")
 def download(slug: str):
-    w = store.work(slug) if service.SLUG_RE.match(slug) else None
+    w = _public(slug)
     dl = (w or {}).get("download")
     path = store.download_path(slug, dl["name"]) if dl else None
-    if not path or w.get("hidden"):
+    if not path:
         return _err("받을 파일이 없습니다", 404)
     return FileResponse(path, filename=dl["name"], media_type="application/octet-stream",
                         headers={"Cache-Control": "no-cache"})
@@ -248,8 +256,8 @@ def download(slug: str):
 
 @router.get("/dl/{slug}/a/{name}")
 def download_release(slug: str, name: str):
-    w = store.work(slug) if service.SLUG_RE.match(slug) else None
-    url = releases.asset_url(w.get("release"), name) if w and not w.get("hidden") and w.get("release") else None
+    w = _public(slug)
+    url = releases.asset_url(w.get("release"), name) if w and w.get("release") else None
     if not url:
         return _err("받을 파일이 없습니다", 404)
     return RedirectResponse(url, status_code=302)
@@ -509,7 +517,7 @@ class TrackMiddleware:
         await self.app(scope, receive, send_and_note)
         try:
             headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
-            hit = service.classify("GET", scope.get("path", ""), status.get("code"), headers, store.works())
+            hit = service.classify("GET", scope.get("path", ""), status.get("code"), headers, _works())
             if hit:
                 peer = (scope.get("client") or (None,))[0]
                 ip, source = service.client_ip(headers, peer)
