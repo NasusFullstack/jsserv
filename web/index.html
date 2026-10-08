@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESC}}">
+<meta name="theme-color" content="#05060a">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{SITE}}">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESC}}">
+<meta property="og:image" content="{{IMAGE}}">
+<meta property="og:url" content="{{URL}}">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<!-- CSS 층: 토큰 → 기본 → 배경 레이어 → 부품 → 이 페이지 → 움직임 -->
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/layers.css">
+<link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/home.css">
+<link rel="stylesheet" href="/static/css/motion.css">
+<!-- 첫 방문이면 부팅 화면을 그리기 전에 켠다(깜빡임 없이) -->
+<script src="/static/js/boot-gate.js"></script>
+<script type="module" src="/static/js/home/main.js"></script>
+</head>
+<body>
+
+<!-- ===== 배경 레이어 (뒤 → 앞) ===== -->
+<div class="layers" aria-hidden="true">
+  <div class="layer layer--base"></div>
+  <div class="layer layer--aurora"><i></i><i></i><i></i></div>
+  <canvas class="layer layer--field" id="field"></canvas>
+  <div class="layer layer--grid"></div>
+  <div class="layer layer--grain"></div>
+</div>
+<div class="layer-spot" aria-hidden="true"></div>
+<div class="scroll-progress" aria-hidden="true"><i></i></div>
+
+<!-- ===== 머리 ===== -->
+<header class="topbar" id="topbar">
+  <a class="brand" href="#top" aria-label="맨 위로">
+    <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5eead4"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs><rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="none" stroke="url(#bm)" stroke-width="2"/><path d="M9 23V9l14 14V9" fill="none" stroke="url(#bm)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="brand__name" data-site-name>{{SITE}}</span>
+  </a>
+  <nav class="topnav" aria-label="구역">
+    <a href="#works"><span class="mono">01</span>작품</a>
+    <a href="#lab"><span class="mono">02</span>서버</a>
+    <a href="#visits"><span class="mono">03</span>방문</a>
+    <a href="#contact"><span class="mono">04</span>연락</a>
+  </nav>
+  <div class="topbar__live mono" title="오늘 방문자"><span class="live-dot"></span><span id="liveToday">—</span> today</div>
+</header>
+
+<main id="main">
+
+  <!-- ===== 01 첫 화면 ===== -->
+  <section class="hero" id="top">
+    <div class="hero__grid">
+      <div class="hero__top">
+        <p class="hero__status mono">
+          <span class="live-dot"></span><span data-scramble>SYSTEM ONLINE</span>
+          <span class="sep">/</span><span id="clock">KST --:--:--</span>
+        </p>
+        <p class="eyebrow mono"><span data-scramble>PORTFOLIO</span> <span class="eyebrow__line"></span> <span id="heroCount">— WORKS</span></p>
+      </div>
+      <h1 class="hero__name" id="heroName" data-site-name>{{SITE}}</h1>
+      <div class="hero__copy">
+        <p class="hero__headline" id="heroHeadline">{{DESC}}</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" data-magnetic href="#works"><span>작품 보기</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <a class="btn btn--ghost" data-magnetic href="#contact"><span>연락하기</span></a>
+        </div>
+      </div>
+
+      <aside class="hero__panel glass" aria-label="실시간 현황" data-tilt>
+        <div class="panel__head mono"><span class="live-dot"></span>LIVE <span class="panel__sub">방문 현황</span></div>
+        <div class="panel__big">
+          <span class="panel__num" data-count id="statToday">0</span>
+          <span class="panel__label">오늘 방문자</span>
+        </div>
+        <div class="panel__row">
+          <div><span class="panel__mid" data-count id="statTotal">0</span><span class="panel__label">누적 방문자</span></div>
+          <div><span class="panel__mid" data-count id="statWorks">0</span><span class="panel__label">작품</span></div>
+          <div><span class="panel__mid" data-count id="statPlays">0</span><span class="panel__label">플레이</span></div>
+        </div>
+        <div class="panel__spark">
+          <svg id="spark" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="최근 14일 방문자"></svg>
+          <span class="panel__label mono">최근 14일 방문자</span>
+        </div>
+      </aside>
+    </div>
+    <a class="scroll-cue mono" href="#works" aria-label="아래로"><span>SCROLL</span><i></i></a>
+  </section>
+
+  <div class="marquee" aria-hidden="true"><div class="marquee__track" id="marquee"></div></div>
+
+  <!-- ===== 02 작품 ===== -->
+  <section class="section" id="works">
+    <header class="section__head reveal">
+      <span class="section__no mono">01</span>
+      <div>
+        <h2 class="section__title" data-scramble>작품</h2>
+        <p class="section__sub">직접 만들고 올린 것들. 누르면 자세히 볼 수 있습니다.</p>
+      </div>
+      <div class="chips" id="chips" role="tablist" aria-label="종류"></div>
+    </header>
+    <div class="works" id="worksGrid" aria-live="polite"></div>
+  </section>
+
+  <!-- ===== 03 서버 ===== -->
+  <section class="section" id="lab">
+    <header class="section__head reveal">
+      <span class="section__no mono">02</span>
+      <div>
+        <h2 class="section__title" data-scramble>서버</h2>
+        <p class="section__sub">이 사이트와 작품들이 돌아가는 서버. 지금 이 순간의 상태입니다.</p>
+      </div>
+    </header>
+    <div class="lab">
+      <div class="lab__term glass reveal" aria-label="서버 상태">
+        <div class="term__bar"><i></i><i></i><i></i><span class="mono">jsserv — status</span></div>
+        <div class="term__body mono" id="term"></div>
+      </div>
+      <div class="lab__pulse glass reveal">
+        <div class="pulse__head">
+          <span class="mono">LATENCY</span>
+          <strong class="pulse__ms"><span id="pingMs">--</span><small>ms</small></strong>
+        </div>
+        <canvas id="pulse" aria-label="서버 응답 시간 그래프"></canvas>
+        <p class="pulse__foot mono"><span id="pingNote">측정 중…</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 04 방문 ===== -->
+  <section class="section" id="visits">
+    <header class="section__head reveal">
+      <span class="section__no mono">03</span>
+      <div>
+        <h2 class="section__title" data-scramble>방문</h2>
+        <p class="section__sub">하루에 한 번씩만 셉니다. IP 는 저장하지 않습니다.</p>
+      </div>
+    </header>
+    <div class="tiles" id="tiles"></div>
+    <figure class="chart glass reveal">
+      <figcaption class="chart__title">최근 14일 방문자</figcaption>
+      <div class="chart__plot" id="visitChart"></div>
+    </figure>
+  </section>
+
+  <!-- ===== 05 연락 ===== -->
+  <section class="section contact" id="contact">
+    <span class="section__no mono reveal">04</span>
+    <h2 class="contact__big reveal"><span>무언가 함께 만들거나</span><span>의견이 있다면.</span></h2>
+    <p class="contact__about reveal" id="about"></p>
+    <div class="contact__links reveal" id="contactLinks"></div>
+  </section>
+</main>
+
+<footer class="footer mono">
+  <span>© <span id="year">2026</span> <span data-site-name>{{SITE}}</span></span>
+  <span class="footer__mid">served by <b id="serverName">jsserv</b> <span id="serverVer"></span></span>
+  <a href="/admin" class="footer__admin">관리</a>
+</footer>
+
+<!-- ===== 작품 자세히 (겹치는 레이어) ===== -->
+<div class="detail" id="detail" hidden>
+  <div class="detail__backdrop" data-close></div>
+  <article class="detail__sheet" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+    <button class="detail__close" data-close aria-label="닫기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div class="detail__media" id="detailMedia"></div>
+    <div class="detail__body" id="detailBody"></div>
+  </article>
+</div>
+<div class="lightbox" id="lightbox" hidden><img alt=""></div>
+
+<!-- ===== 부팅 화면 (첫 방문만) ===== -->
+<div class="boot" id="boot" aria-hidden="true">
+  <div class="boot__inner mono">
+    <div class="boot__lines" id="bootLines"></div>
+    <div class="boot__bar"><i id="bootBar"></i></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -1,0 +1,128 @@
+/* ============================================================
+   배경 레이어 층 — 내용 뒤에 깔리는 다섯 장과 앞에 뜨는 빛 한 장.
+
+     0 base    바탕 그라데이션
+     1 aurora  천천히 떠다니는 빛 덩어리 3개      (스크롤 0.15배 · 마우스 반대로 24px)
+     2 field   별자리처럼 이어지는 점들 (canvas)  (fx/field.js)
+     3 grid    위에서 퍼지는 격자                  (스크롤 0.35배)
+     4 grain   필름 입자 + 가장자리 어둡게
+    ── 내용 (z 10) ──
+    20 spot    마우스를 따라다니는 빛
+
+   레이어마다 스크롤·마우스에 따라 움직이는 양이 달라서 깊이가 생긴다(시차).
+   값(--sy, --px, --py, --mx, --my)은 fx/parallax.js 가 채운다.
+   ============================================================ */
+.layers {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-base);
+  pointer-events: none;
+  overflow: hidden;
+}
+.layer { position: absolute; inset: 0; }
+
+/* 0 — 바탕 */
+.layer--base {
+  z-index: var(--z-base);
+  background:
+    radial-gradient(120% 80% at 50% -10%, #121628 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, var(--bg-0));
+}
+
+/* 1 — 오로라 */
+.layer--aurora {
+  z-index: var(--z-aurora);
+  inset: -20%;
+  filter: blur(90px) saturate(1.2);
+  opacity: .55;
+  transform: translate3d(calc(var(--px) * -24px), calc(var(--sy) * -.15px + var(--py) * -24px), 0);
+  will-change: transform;
+}
+.layer--aurora i {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  animation: aurora-drift 26s var(--ease-in-out) infinite alternate;
+}
+.layer--aurora i:nth-child(1) {
+  width: 46vmax; height: 46vmax; left: 8%; top: 4%;
+  background: radial-gradient(circle, rgba(94, 234, 212, .55), transparent 65%);
+}
+.layer--aurora i:nth-child(2) {
+  width: 52vmax; height: 52vmax; right: 2%; top: 18%;
+  background: radial-gradient(circle, rgba(167, 139, 250, .55), transparent 65%);
+  animation-duration: 32s;
+  animation-delay: -8s;
+}
+.layer--aurora i:nth-child(3) {
+  width: 40vmax; height: 40vmax; left: 30%; top: 56%;
+  background: radial-gradient(circle, rgba(251, 113, 133, .35), transparent 65%);
+  animation-duration: 38s;
+  animation-delay: -16s;
+}
+
+/* 2 — 점과 선 */
+.layer--field {
+  z-index: var(--z-field);
+  width: 100%;
+  height: 100%;
+  opacity: .9;
+}
+
+/* 3 — 격자 */
+.layer--grid {
+  z-index: var(--z-grid);
+  inset: -10% 0 -60% 0;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 72px 72px;
+  background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 20%, transparent 75%);
+  opacity: .55;
+  transform: translate3d(calc(var(--px) * -8px), calc(var(--sy) * -.35px), 0);
+  will-change: transform;
+}
+
+/* 4 — 입자 + 가장자리 */
+.layer--grain {
+  z-index: var(--z-grain);
+  background:
+    radial-gradient(ellipse 120% 90% at 50% 40%, transparent 55%, rgba(0, 0, 0, .55) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: .5;
+  mix-blend-mode: overlay;
+  animation: grain 1.2s steps(6) infinite;
+}
+
+/* 20 — 마우스 빛 */
+.layer-spot {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-spot);
+  pointer-events: none;
+  background: radial-gradient(520px circle at var(--mx) var(--my), rgba(94, 234, 212, .07), transparent 60%);
+  mix-blend-mode: screen;
+}
+@media (pointer: coarse) { .layer-spot { display: none; } }
+
+/* 맨 위 스크롤 진행 막대 */
+.scroll-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: calc(var(--z-header) + 1);
+  pointer-events: none;
+}
+.scroll-progress i {
+  display: block;
+  height: 100%;
+  background: var(--grad);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--progress, 0));
+  box-shadow: 0 0 12px rgba(94, 234, 212, .6);
+}
+
+/* 내용은 배경 위에 */
+main, .footer { position: relative; z-index: var(--z-content); }

@@ -1,0 +1,68 @@
+/* ============================================================
+   움직임 층 — 모든 keyframes 와 "움직임 줄이기" 설정. 움직임을 손볼 때는 여기만.
+   ============================================================ */
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(6vw, -4vh, 0) scale(1.15); }
+  100% { transform: translate3d(-5vw, 6vh, 0) scale(.92); }
+}
+@keyframes grain {
+  0%   { background-position: 0 0, 0 0; }
+  20%  { background-position: 0 0, -40px 30px; }
+  40%  { background-position: 0 0, 30px -60px; }
+  60%  { background-position: 0 0, -70px -20px; }
+  80%  { background-position: 0 0, 50px 70px; }
+  100% { background-position: 0 0, 0 0; }
+}
+@keyframes ping {
+  0%   { transform: scale(1); opacity: .9; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+@keyframes ring {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 0 10px 30px -6px var(--accent); }
+  100% { box-shadow: 0 0 0 18px transparent, 0 10px 30px -6px var(--accent); }
+}
+@keyframes letter-hop {
+  0%   { transform: none; }
+  40%  { transform: translateY(-14%) rotate(-4deg); }
+  100% { transform: none; }
+}
+@keyframes glitch-a {
+  0%   { clip-path: inset(10% 0 70% 0); transform: translate(-4px, -2px); }
+  50%  { clip-path: inset(55% 0 20% 0); transform: translate(5px, 1px); }
+  100% { clip-path: inset(80% 0 5% 0); transform: translate(-2px, 2px); opacity: 0; }
+}
+@keyframes glitch-b {
+  0%   { clip-path: inset(65% 0 15% 0); transform: translate(4px, 2px); }
+  50%  { clip-path: inset(20% 0 60% 0); transform: translate(-5px, -1px); }
+  100% { clip-path: inset(5% 0 85% 0); transform: translate(2px, -2px); opacity: 0; }
+}
+@keyframes cue {
+  0%   { transform: scaleY(0); opacity: 1; }
+  60%  { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(1); opacity: 0; }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes term-in { to { opacity: 1; transform: none; } }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes grad-shift { to { background-position: 200% 0; } }
+@keyframes pop { from { transform: scale(.92); opacity: 0; } }
+@keyframes boot-failsafe { to { visibility: hidden; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* 움직임 줄이기: 장식 움직임은 멈추고, 나타나기는 바로 보이게 */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    transition-delay: 0s !important;
+  }
+  .layer--aurora, .layer--grid, .hero__grid { transform: none !important; }
+  .reveal, .hero__name .ch { opacity: 1 !important; transform: none !important; }
+}

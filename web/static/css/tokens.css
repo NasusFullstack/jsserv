@@ -1,0 +1,74 @@
+/* ============================================================
+   토큰 층 — 색·글꼴·간격·곡선·레이어 순서. 다른 CSS 는 값을 여기서만 가져다 쓴다.
+   사이트 전체 인상을 바꾸려면 이 파일만 고치면 된다.
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  /* 바탕 (뒤 → 앞으로 갈수록 밝아짐) */
+  --bg-0: #05060a;
+  --bg-1: #0a0c13;
+  --bg-2: #10131d;
+  --glass: rgba(16, 19, 30, .58);
+  --glass-strong: rgba(11, 13, 21, .88);
+  --line: rgba(255, 255, 255, .08);
+  --line-2: rgba(255, 255, 255, .16);
+
+  /* 글자 */
+  --ink: #eef1f8;
+  --ink-2: #b3b9ca;
+  --ink-3: #7c8399;
+
+  /* 강조 (화면 장식용 — 빛나는 쪽) */
+  --mint: #5eead4;
+  --violet: #a78bfa;
+  --rose: #fb7185;
+  --sky: #60a5fa;
+  --amber: #fbbf24;
+  --good: #34d399;
+  --bad: #f87171;
+  --grad: linear-gradient(100deg, var(--mint), var(--violet) 55%, var(--rose));
+
+  /* 그래프 계열 색 (어두운 바탕 기준 검증: 밝기 띠·색약 구분·대비 통과) */
+  --s-visitors: #10a68f;
+  --s-plays: #8b5cf6;
+  --s-downloads: #c47d0a;
+
+  /* 글꼴 */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-display: "Space Grotesk", var(--font-sans);
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, "D2Coding", monospace;
+
+  /* 모양 */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --gutter: clamp(16px, 4vw, 48px);
+  --max: 1240px;
+
+  /* 움직임 곡선 */
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+
+  /* 레이어 순서 — 겹치는 것은 전부 이 표대로 */
+  --z-base: 0;
+  --z-aurora: 1;
+  --z-field: 2;
+  --z-grid: 3;
+  --z-grain: 4;
+  --z-content: 10;
+  --z-spot: 20;
+  --z-header: 50;
+  --z-overlay: 80;
+  --z-boot: 90;
+  --z-toast: 100;
+
+  /* JS 가 채우는 값 (fx/parallax.js) */
+  --sy: 0;      /* 스크롤 px */
+  --px: 0;      /* 마우스 가로 -1 ~ 1 */
+  --py: 0;      /* 마우스 세로 -1 ~ 1 */
+  --mx: 50vw;   /* 마우스 위치 px */
+  --my: 30vh;
+  --hero-out: 0;  /* 첫 화면을 지나간 정도 0 ~ 1 */
+}

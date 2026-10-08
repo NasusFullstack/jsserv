@@ -1,0 +1,234 @@
+/* ============================================================
+   부품 층 — 어느 페이지에서나 쓰는 조각: 유리판, 버튼, 칩, 태그, 숫자판, 말풍선, 알림.
+   페이지마다 다른 배치는 home.css / admin.css 에.
+   ============================================================ */
+
+/* ---- 유리판 ---- */
+.glass {
+  position: relative;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 30px 60px -30px rgba(0, 0, 0, .7);
+}
+/* 마우스를 따라 테두리가 빛난다 (--lx, --ly 는 fx/spotlight.js) */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(300px circle at var(--lx, -999px) var(--ly, -999px), rgba(94, 234, 212, .65), rgba(167, 139, 250, .35) 40%, transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .4s;
+}
+.glass:hover::before { opacity: 1; }
+
+/* ---- 살아 있음 점 ---- */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 10px var(--good);
+  flex: none;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--good);
+  animation: ping 2s var(--ease-out) infinite;
+}
+.live-dot.is-down { background: var(--bad); box-shadow: 0 0 10px var(--bad); }
+.live-dot.is-down::after { border-color: var(--bad); }
+
+/* ---- 버튼 ---- */
+.btn {
+  --b-bg: transparent;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform .35s var(--ease-out), box-shadow .35s var(--ease-out), background .3s, color .3s, border-color .3s;
+  will-change: transform;
+}
+.btn svg { width: 18px; height: 18px; flex: none; transition: transform .35s var(--ease-out); }
+.btn:hover svg { transform: translateX(3px); }
+.btn:active { transform: scale(.97); }
+.btn--primary {
+  color: #04120f;
+  background: var(--mint);
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, .4), 0 10px 40px -10px rgba(94, 234, 212, .7);
+}
+/* 지나가는 빛줄기 */
+.btn--primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .7) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform .8s var(--ease-out);
+}
+.btn--primary:hover::after { transform: translateX(120%); }
+.btn--primary:hover { box-shadow: 0 0 0 1px rgba(94, 234, 212, .6), 0 14px 50px -8px rgba(94, 234, 212, .9); }
+.btn--ghost {
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, .03);
+}
+.btn--ghost:hover { border-color: var(--mint); color: var(--mint); background: rgba(94, 234, 212, .06); }
+.btn--accent {
+  color: #fff;
+  background: var(--accent, var(--violet));
+  box-shadow: 0 10px 40px -12px var(--accent, var(--violet));
+}
+.btn--accent:hover { filter: brightness(1.12); }
+.btn--sm { min-height: 36px; padding: 0 14px; font-size: 13px; gap: 6px; }
+.btn--danger { color: var(--bad); border: 1px solid rgba(248, 113, 113, .35); }
+.btn--danger:hover { background: rgba(248, 113, 113, .1); }
+.btn[disabled] { opacity: .45; pointer-events: none; }
+
+/* ---- 칩 (필터) ---- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  position: relative;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 14px;
+  background: rgba(255, 255, 255, .02);
+  transition: color .25s, border-color .25s, background .25s;
+}
+.chip:hover { color: var(--ink); border-color: var(--line-2); }
+.chip[aria-selected="true"] { color: #04120f; background: var(--mint); border-color: var(--mint); font-weight: 600; }
+.chip .mono { font-size: 11px; margin-left: 4px; opacity: .7; }
+
+/* ---- 태그 ---- */
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line);
+}
+
+/* ---- 작은 표식 ---- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(5, 6, 10, .65);
+  border: 1px solid var(--line-2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent, var(--mint)); box-shadow: 0 0 8px var(--accent, var(--mint)); }
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  letter-spacing: .18em;
+  color: var(--ink-3);
+}
+.eyebrow__line { width: 56px; height: 1px; background: linear-gradient(90deg, var(--mint), transparent); }
+
+/* ---- 숫자판 ---- */
+.tile {
+  padding: 22px;
+  border-radius: var(--r-md);
+}
+.tile__label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.tile__label i { width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--mint)); flex: none; }
+.tile__value {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.tile__sub { display: block; margin-top: 8px; font-size: 12px; color: var(--ink-3); }
+
+/* ---- 그래프 말풍선 ---- */
+.tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 12px));
+  opacity: 0;
+  transition: opacity .15s;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+}
+.tip.is-on { opacity: 1; }
+.tip b { font-family: var(--font-display); font-size: 16px; }
+.tip span { display: block; color: var(--ink-3); font-size: 11px; font-family: var(--font-mono); }
+
+/* ---- 막대그래프 (core/barchart.js) ---- */
+.bars { position: relative; width: 100%; }
+.bars svg { width: 100%; overflow: visible; }
+.bars .grid line { stroke: var(--line); stroke-width: 1; }
+.bars .grid text, .bars .xlab text { fill: var(--ink-3); font-size: 11px; font-family: var(--font-mono); }
+.bars .bar { transition: opacity .2s, filter .2s; }
+.bars.is-hover .bar { opacity: .35; }
+.bars.is-hover .bar.is-on { opacity: 1; filter: brightness(1.25); }
+.bars .hit { fill: transparent; cursor: crosshair; }
+.bars .empty { fill: var(--ink-3); font-size: 13px; }
+
+/* ---- 알림 ---- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: var(--z-toast);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line-2);
+  font-size: 14px;
+  transform: translate(-50%, 20px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s, transform .4s var(--ease-out);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .6);
+  max-width: calc(100vw - 32px);
+}
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.toast.is-bad { border-color: rgba(248, 113, 113, .5); color: #fecaca; }
