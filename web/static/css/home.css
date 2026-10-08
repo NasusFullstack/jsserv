@@ -551,3 +551,64 @@
 .boot__lines .p { color: var(--mint); }
 .boot__bar { height: 2px; margin-top: 18px; background: var(--line); overflow: hidden; border-radius: 2px; }
 .boot__bar i { display: block; height: 100%; width: 100%; background: var(--grad); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); transition: transform .25s var(--ease-out); box-shadow: 0 0 12px var(--mint); }
+
+/* ---- 댓글 (home/comments.js) ---- */
+.comments { margin-top: 44px; padding-top: 30px; border-top: 1px solid var(--line); }
+.comments__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 16px; }
+.comments__head h3 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.comments__head h3 span { color: var(--accent); }
+.comments__note { font-size: 12px; color: var(--ink-3); }
+.comments__empty { padding: 26px 0 6px; color: var(--ink-3); font-size: 14px; }
+.comments__more { margin-top: 18px; }
+
+.cform { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: rgba(0, 0, 0, .22); }
+.cform:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.cform__who { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cform__foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.cform__left { margin-right: auto; font-size: 11px; color: var(--ink-3); }
+.cform--reply { margin-top: 10px; padding: 10px; }
+.cinput {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .3);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.cinput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.cinput--body { resize: vertical; min-height: 64px; line-height: 1.6; font-family: inherit; }
+.hp { position: absolute !important; left: -9999px; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+
+.clist { margin-top: 18px; }
+.cthread { border-bottom: 1px solid var(--line); padding: 4px 0 14px; }
+.cthread:last-child { border-bottom: 0; }
+.c { padding: 12px 0 2px; }
+.c__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 14px; }
+.c__nick { font-weight: 700; color: var(--ink); }
+.c__owner { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; color: #05060a; background: var(--accent); }
+.c__time { font-size: 12px; color: var(--ink-3); }
+.c__body { margin-top: 5px; white-space: pre-wrap; color: var(--ink-2); line-height: 1.7; font-size: 15px; }
+.c__at { color: var(--accent); font-weight: 700; margin-right: 6px; }
+.c__actions { display: flex; gap: 14px; margin-top: 6px; }
+.c__actions button { font-size: 12px; color: var(--ink-3); padding: 2px 0; transition: color .2s; }
+.c__actions button:hover { color: var(--ink); }
+.c--deleted .c__body { font-style: italic; color: var(--ink-3); font-size: 13px; }
+.c.is-new { animation: c-new 1.8s var(--ease-out); border-radius: 10px; }
+@keyframes c-new { 0%, 30% { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 16%, transparent); } }
+.cdel { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cdel .cinput { flex: 1 1 180px; }
+
+.c__replies { margin: 6px 0 0 18px; padding-left: 16px; border-left: 2px solid var(--line); }
+.c--reply { padding-top: 10px; }
+.c--reply .c__body { font-size: 14px; }
+.c__more { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; padding: 4px 0; font-size: 13px; font-weight: 600; color: var(--accent); }
+.c__more i { width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .3s var(--ease-out); }
+.c__more[aria-expanded="true"] i { transform: rotate(-135deg) translate(-2px, 0); }
+@media (max-width: 760px) {
+  .cform__who { grid-template-columns: 1fr; }
+  .c__replies { margin-left: 4px; padding-left: 12px; }
+}

@@ -83,7 +83,8 @@ function card(w, featured) {
     h('div.card__foot',
       h('span.card__nums.mono',
         w.play ? h('span', { title: '플레이한 사람' }, `▶ ${num(w.plays)}`) : null,
-        w.download || w.release ? h('span', { title: '받은 사람' }, `↓ ${num(w.downloads)}`) : null),
+        w.download || w.release ? h('span', { title: '받은 사람' }, `↓ ${num(w.downloads)}`) : null,
+        h('span', { title: '댓글' }, `💬 ${num(w.comments || 0)}`)),
       h('span.card__go', '자세히', icon('arrow')))));
   el.querySelector('.card__go svg').style.cssText = 'width:14px;height:14px';
   // 움직이는 대표 그림은 마우스를 올렸을 때만 움직인다 (목록 전체가 한꺼번에 움직이면 무겁다)

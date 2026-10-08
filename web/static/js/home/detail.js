@@ -5,6 +5,7 @@ import { $, h, icon, toast } from '../core/dom.js';
 import { bytes, date, num } from '../core/format.js';
 import { reduced } from '../core/motion.js';
 import { mediaFor } from './works.js';
+import { mountComments } from './comments.js';
 
 const root = () => $('#detail');
 let fromCard = null;
@@ -18,8 +19,10 @@ export function openDetail(w, card = null, push = true) {
   sheet.style.setProperty('--accent', w.accent || '#5eead4');
   const media = $('#detailMedia');
   media.replaceChildren(mediaFor(w, '', true));
-  $('#detailBody').replaceChildren(...body(w));
-  [...$('#detailBody').children].forEach((c, i) => c.style.setProperty('--i', i));
+  const talk = h('section.comments#comments', { 'aria-label': '댓글' });
+  $('#detailBody').replaceChildren(...body(w), talk);
+  [...$('#detailBody').children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 8)));
+  mountComments(talk, w, (n) => { w.comments = n; });
 
   d.hidden = false;
   document.body.style.overflow = 'hidden';

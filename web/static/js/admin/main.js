@@ -3,6 +3,7 @@
 //   session.js    열쇠 보관과 서버 요청
 //   dashboard.js  숫자·그래프·서버 상태
 //   works.js      작품 편집과 파일 올리기
+//   comments.js   댓글 (작성자 답글·지우기)
 //   settings.js   사이트 설정
 
 import { $, $$, toast } from '../core/dom.js';
@@ -10,8 +11,9 @@ import { AuthError, call, session } from './session.js';
 import { renderDashboard } from './dashboard.js';
 import { renderWorks } from './works.js';
 import { renderSettings } from './settings.js';
+import { renderComments } from './comments.js';
 
-const views = { dash: renderDashboard, works: renderWorks, settings: renderSettings };
+const views = { dash: renderDashboard, works: renderWorks, comments: renderComments, settings: renderSettings };
 let current = 'dash';
 let data = null;
 

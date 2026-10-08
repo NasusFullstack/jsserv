@@ -14,6 +14,13 @@ export async function getJSON(url, options = {}) {
 
 export const overview = () => getJSON('/api/overview');
 
+/** JSON 을 보내고 JSON 을 받는다 (댓글 쓰기·지우기) */
+export const sendJSON = (method, url, body) => getJSON(url, {
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body || {}),
+});
+
 /** 서버까지 한 번 다녀오는 시간(ms). 실패하면 null */
 export async function ping() {
   const t = performance.now();

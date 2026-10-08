@@ -32,7 +32,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import auth, releases, service, stats, store
+from . import auth, comments, releases, service, stats, store
 from . import config as C
 from .service import Invalid
 
@@ -221,7 +221,9 @@ def _release(w):
 @router.get("/api/overview")
 def overview():
     summary = stats.summary(days=14)
-    works = [service.public_work(w, summary["works"], _release(w)) for w in _works() if not w.get("hidden")]
+    talk = comments.counts()
+    works = [dict(service.public_work(w, summary["works"], _release(w)), comments=talk.get(w["slug"], 0))
+             for w in _works() if not w.get("hidden")]
     s = _settings()
     return JSONResponse({
         "site": s,
@@ -301,6 +303,7 @@ def admin_overview(request: Request):
     if denied:
         return denied
     summary = stats.summary(days=30, refs_days=30)
+    talk = comments.counts()
     sizes = {name: store.folder_bytes(path) for name, path in
              (("그림", C.MEDIA), ("다운로드", C.DOWNLOADS), ("웹 빌드", C.BUILDS))}
     try:
@@ -309,7 +312,7 @@ def admin_overview(request: Request):
         sizes["통계"] = 0
     return JSONResponse({
         "site": _settings(),
-        "works": [service.admin_work(w, summary["works"], _release(w)) for w in _works()],
+        "works": [dict(service.admin_work(w, summary["works"], _release(w)), comments=talk.get(w["slug"], 0)) for w in _works()],
         "stats": summary,
         "server": {"name": _server["name"], "version": _server["version"], "uptime": int(time.time() - STARTED),
                    "python": platform.python_version(), "data_dir": C.DATA, "disk": _disk(), "sizes": sizes,
@@ -355,6 +358,7 @@ def admin_delete_work(slug: str, request: Request):
         return denied
     if not service.SLUG_RE.match(slug) or not store.delete_work(slug):
         return _err("없는 작품", 404)
+    comments.remove_work(slug)
     return {"ok": True}
 
 

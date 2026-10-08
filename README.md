@@ -34,10 +34,14 @@
 - **웹 빌드** — `index.html` 이 든 zip 을 올리면 `/p/<작품>/` 에서 바로 플레이 (Godot·Unity 웹 내보내기, HTML5 게임)
 - **GitHub 릴리스** — 작품에 `주인/저장소` 를 적으면 최신 릴리스의 버전·파일이 다운로드 버튼으로 자동으로 나온다(30분마다 확인)
 - **방문 통계** — 하루 한 사람 한 번씩 센다. IP 는 저장하지 않는다(날마다 바뀌는 지문만, 이틀 뒤 삭제). 검색 로봇은 안 센다
+- **댓글** — 작품마다. 계정 없이 닉네임 + 비밀번호(지울 때). 깊이 2(본댓 → 답글), 답글에 단 답글은 `@닉네임` 으로
+  그 글 바로 밑에, 답글이 2개 이상이면 접어 둔다. 주인은 관리 화면에서 「작성자」로 답하고 아무 글이나 지운다.
+  같은 사람 1분 3개·하루 60개, 로봇 함정 칸, JSON 으로 보낸 것만 받음(다른 사이트의 몰래 쓰기 막기). 비밀번호·IP 원문은 안 남김
 
 ```
 GET  /api/overview                 첫 화면이 그리는 모든 것
 GET  /dl/<작품>                    다운로드 (올린 파일)   /dl/<작품>/a/<파일> GitHub 릴리스로 넘겨줌
+GET|POST /api/works/<작품>/comments   댓글 목록·쓰기        DELETE /api/comments/<번호> 지우기(비밀번호)
 (열쇠 X-Admin-Key)  GET /api/admin/overview · PUT /api/admin/settings · PUT|DELETE /api/admin/works/<작품>
                     POST /api/admin/works/<작품>/cover|shots|download|build
 ```
@@ -47,7 +51,7 @@ GET  /dl/<작품>                    다운로드 (올린 파일)   /dl/<작품>
 코드는 층으로 나눴다 — 자세한 것은 `features/site/__init__.py`.
 
 ```
-features/site/  config(설정) → store(저장) · stats(통계) · auth(열쇠) · releases(GitHub) → service(규칙) → routes(주소)
+features/site/  config(설정) → store·stats·comments(저장) · auth(열쇠) · releases(GitHub) → service·comment_rules(규칙) → routes·routes_comments(주소)
 web/static/css/ tokens → base → layers(배경 레이어) → components → home / admin → motion
 web/static/js/  core(통신·DOM·형식·그래프) · fx(효과 하나당 파일 하나) · home / admin(칸 하나당 파일 하나)
 ```

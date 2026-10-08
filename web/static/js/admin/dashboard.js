@@ -43,11 +43,12 @@ export function renderDashboard(view, data, reload) {
   const perWork = h('section.panel.glass',
     h('h2.panel__title', '작품별', h('span.mono', '누적 · 하루 한 번씩 센 사람 수')),
     h('table.table',
-      h('thead', h('tr', h('th', '작품'), h('th.num', '플레이'), h('th.num', '다운로드'))),
+      h('thead', h('tr', h('th', '작품'), h('th.num', '플레이'), h('th.num', '다운로드'), h('th.num', '댓글'))),
       h('tbody', works.map((w) => h('tr',
         h('td', h('span.dot', { style: { '--c': w.accent || 'var(--mint)' } }), w.title, w.hidden ? h('span.badge.is-hidden', { style: { 'margin-left': '8px' } }, '숨김') : null),
         h('td.num', w.play ? num(w.plays) : '-'),
-        h('td.num', w.download ? num(w.downloads) : '-'))))));
+        h('td.num', w.download || w.release ? num(w.downloads) : '-'),
+        h('td.num', num(w.comments || 0)))))));
 
   const disk = server.disk;
   const usedPct = disk ? (disk.used / disk.total) * 100 : 0;
