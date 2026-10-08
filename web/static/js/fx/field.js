@@ -1,12 +1,18 @@
 // fx/field — 배경 레이어 2번: 떠다니는 점들이 가까우면 선으로 이어진다. 마우스 근처의 점은 밀려나고 마우스와도 이어진다.
-// 화면 넓이에 맞춰 점 수를 정하고(최대 130), 탭이 숨으면 쉰다. 움직임 줄이기면 한 장만 그린다.
+//
+// 가볍게: 초당 30번만 그린다(느린 배경이라 차이가 안 보인다), 고해상도 화면에서도 1배로 그린다(흐릿한 배경이라 충분),
+// 점은 넓이에 맞춰 최대 80개, 탭이 숨으면 쉰다. 처음 3초 동안 그리는 데 오래 걸리는 컴퓨터면 멈춘 한 장으로 바꾼다.
+// 움직임 줄이기 설정이면 처음부터 한 장만 그린다.
 
 import { loop, reduced } from '../core/motion.js';
 import { pointer } from './parallax.js';
 
 const COLORS = ['94,234,212', '167,139,250', '96,165,250', '251,113,133'];
-const LINK = 130;      // 이 거리 안이면 잇는다
+const LINK = 140;      // 이 거리 안이면 잇는다
 const PUSH = 150;      // 마우스가 미는 거리
+const FPS = 30;
+const MAX_DOTS = 80;
+const SLOW_MS = 14;    // 한 장 그리는 데 평균 이보다 오래 걸리면 멈춘 그림으로
 
 export function startField(canvas) {
   if (!canvas) return;
@@ -14,13 +20,13 @@ export function startField(canvas) {
   let W = 0, H = 0, dpr = 1, dots = [];
 
   const resize = () => {
-    dpr = Math.min(2, devicePixelRatio || 1);
+    dpr = 1;
     W = canvas.clientWidth;
     H = canvas.clientHeight;
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const n = Math.min(130, Math.round((W * H) / 13000));
+    const n = Math.min(MAX_DOTS, Math.round((W * H) / 16000));
     dots = Array.from({ length: n }, (_, i) => ({
       x: Math.random() * W,
       y: Math.random() * H,
@@ -93,9 +99,22 @@ export function startField(canvas) {
     }
   };
 
+  let acc = 0, spent = 0, drawn = 0, stopped = reduced();
   resize();
   let rt;
-  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(resize, 150); });
-  if (reduced()) { frame(0, 0); return; }
-  loop(frame);
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { resize(); if (stopped) frame(0, 0); }, 150); });
+  if (stopped) { frame(0, 0); return; }
+
+  const stop = loop((dt, now) => {
+    acc += dt;
+    if (acc < 1 / FPS) return;
+    const t0 = performance.now();
+    frame(acc, now);
+    acc = 0;
+    if (drawn < 90) {           // 처음 3초: 이 컴퓨터가 감당하는지 본다
+      spent += performance.now() - t0;
+      drawn++;
+      if (drawn === 90 && spent / drawn > SLOW_MS) { stop(); stopped = true; }
+    }
+  });
 }

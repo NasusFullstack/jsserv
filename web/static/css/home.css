@@ -17,10 +17,8 @@
 }
 .topbar.is-scrolled {
   height: 58px;
-  background: rgba(5, 6, 10, .72);
+  background: rgba(5, 6, 10, .95);
   border-color: var(--line);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.02em; }
 .brand__mark { width: 28px; height: 28px; transition: transform .6s var(--ease-spring); }
@@ -49,6 +47,7 @@
 
 /* ---- 첫 화면 ---- */
 .hero {
+  --hero-out: 0;    /* fx/parallax.js 가 이 요소에만 넣는다 */
   position: relative;
   min-height: 100svh;
   display: flex;
@@ -390,9 +389,7 @@
 .detail__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(3, 4, 8, .72);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  background: rgba(3, 4, 8, .86);
   opacity: 0;
   transition: opacity .45s var(--ease-out);
 }

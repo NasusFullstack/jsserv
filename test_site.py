@@ -162,6 +162,17 @@ from PIL import Image  # noqa: E402
 check("긴 변이 1920 으로 줄었다", max(Image.open(io.BytesIO(r.content)).size) == 1920, Image.open(io.BytesIO(r.content)).size)
 r2 = client.post("/api/admin/works/my-game/cover", content=png(), headers=KEY)
 check("새 그림을 올리면 옛 그림은 지운다", client.get(cover).status_code == 404 and r2.json()["work"]["cover"] != cover)
+frames = [Image.new("RGB", (80, 45), c) for c in ((255, 0, 0), (0, 255, 0), (0, 0, 255))]
+buf = io.BytesIO()
+frames[0].save(buf, "GIF", save_all=True, append_images=frames[1:], duration=80, loop=0)
+r = client.post("/api/admin/works/my-game/cover", content=buf.getvalue(), headers=KEY)
+wk = r.json()["work"]
+check("움직이는 GIF 는 그대로 두고 첫 장(멈춘 그림)을 따로 만든다",
+      r.status_code == 200 and wk["cover"].endswith(".gif") and (wk["cover_still"] or "").endswith(".webp"), wk)
+check("멈춘 첫 장이 열린다", client.get(wk["cover_still"]).headers.get("content-type") == "image/webp")
+check("움직이는 GIF 가 그대로 열린다", Image.open(io.BytesIO(client.get(wk["cover"]).content)).n_frames == 3)
+r = client.delete("/api/admin/works/my-game/cover", headers=KEY)
+check("대표 그림을 지우면 첫 장도 같이 지운다", r.json()["work"]["cover_still"] is None and client.get(wk["cover_still"]).status_code == 404, r.json()["work"])
 for _ in range(8):
     client.post("/api/admin/works/my-game/shots", content=png(), headers=KEY)
 r = client.post("/api/admin/works/my-game/shots", content=png(), headers=KEY)

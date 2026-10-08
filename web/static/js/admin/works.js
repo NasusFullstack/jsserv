@@ -31,7 +31,7 @@ export function renderWorks(view, data, refresh) {
 }
 
 function thumb(w) {
-  if (w.cover) return h('img', { src: w.cover, alt: '' });
+  if (w.cover) return h('img', { src: w.cover_still || w.cover, alt: '' });
   const c = h('canvas');
   requestAnimationFrame(() => paintCover(c, { seed: w.slug, accent: w.accent, title: w.title }));
   return c;

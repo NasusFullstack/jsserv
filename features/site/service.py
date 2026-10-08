@@ -189,6 +189,7 @@ def public_work(w, counts, release=None):
         "tags": w.get("tags", []),
         "accent": w.get("accent", ""),
         "cover": media_url(slug, w.get("cover")),
+        "cover_still": media_url(slug, w.get("cover_still")),   # 움직이는 그림의 첫 장 (없으면 None)
         "shots": [media_url(slug, s) for s in w.get("shots", [])],
         "play": play_url(w),
         "download": {"url": "/dl/" + slug, "name": dl["name"], "bytes": dl["bytes"], "updated": dl["updated"]} if dl else None,
@@ -310,6 +311,24 @@ def prepare_image(data):
     out = io.BytesIO()
     im.save(out, "WEBP", quality=86, method=4)
     return ".webp", out.getvalue()
+
+
+def still_of(data):
+    """움직이는 그림(GIF·움직이는 WebP)이면 첫 장을 멈춘 WebP 로. 아니면 None.
+    목록 카드에는 이걸 보여주고 마우스를 올렸을 때만 움직이게 해서 첫 화면을 가볍게 한다."""
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(data))
+        if getattr(im, "n_frames", 1) <= 1:
+            return None
+        im.seek(0)
+        frame = im.convert("RGBA")
+        frame.thumbnail((C.IMAGE_EDGE, C.IMAGE_EDGE))
+        out = io.BytesIO()
+        frame.save(out, "WEBP", quality=84, method=4)
+        return out.getvalue()
+    except Exception:
+        return None
 
 
 # ---- 다운로드 파일 이름 ----

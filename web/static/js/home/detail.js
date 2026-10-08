@@ -17,7 +17,7 @@ export function openDetail(w, card = null, push = true) {
   const sheet = d.querySelector('.detail__sheet');
   sheet.style.setProperty('--accent', w.accent || '#5eead4');
   const media = $('#detailMedia');
-  media.replaceChildren(mediaFor(w));
+  media.replaceChildren(mediaFor(w, '', true));
   $('#detailBody').replaceChildren(...body(w));
   [...$('#detailBody').children].forEach((c, i) => c.style.setProperty('--i', i));
 

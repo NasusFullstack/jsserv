@@ -48,8 +48,12 @@ function grid(kind) {
   });
 }
 
-export function mediaFor(w, cls = '') {
-  if (w.cover) return h(`img${cls}`, { src: w.cover, alt: '', loading: 'lazy', decoding: 'async' });
+/** 작품 그림. 움직이는 그림이면 기본은 첫 장(가벼움), animate 면 움직이는 것 */
+export function mediaFor(w, cls = '', animate = false) {
+  if (w.cover) {
+    const still = w.cover_still && !animate;
+    return h(`img${cls}`, { src: still ? w.cover_still : w.cover, alt: '', loading: 'lazy', decoding: 'async', data: still ? { anim: w.cover, still: w.cover_still } : null });
+  }
   const cv = h(`canvas${cls}`, { 'aria-hidden': 'true' });
   // 크기가 정해진 뒤에 그린다
   requestAnimationFrame(() => paintCover(cv, { seed: w.slug, accent: w.accent, title: w.title }));
@@ -82,6 +86,12 @@ function card(w, featured) {
         w.download || w.release ? h('span', { title: '받은 사람' }, `↓ ${num(w.downloads)}`) : null),
       h('span.card__go', '자세히', icon('arrow')))));
   el.querySelector('.card__go svg').style.cssText = 'width:14px;height:14px';
+  // 움직이는 대표 그림은 마우스를 올렸을 때만 움직인다 (목록 전체가 한꺼번에 움직이면 무겁다)
+  const img = el.querySelector('img[data-anim]');
+  if (img) {
+    el.addEventListener('pointerenter', () => { img.src = img.dataset.anim; });
+    el.addEventListener('pointerleave', () => { img.src = img.dataset.still; });
+  }
   return el;
 }
 

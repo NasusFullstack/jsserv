@@ -383,8 +383,11 @@ async def admin_cover(slug: str, request: Request):
         return got
     w, ext, data = got
     name = store.save_image(slug, "cover", ext, data)
+    still_bytes = await run_in_threadpool(service.still_of, data)
+    still = store.save_image(slug, "still", ".webp", still_bytes) if still_bytes else None
     store.remove_image(slug, w.get("cover"))
-    w = store.put_work(slug, {"cover": name})
+    store.remove_image(slug, w.get("cover_still"))
+    w = store.put_work(slug, {"cover": name, "cover_still": still})
     return {"ok": True, "work": service.admin_work(w, {})}
 
 
@@ -488,6 +491,8 @@ def admin_remove_file(slug: str, what: str, request: Request):
         return _err("없는 것", 404)
     if what == "cover":
         store.remove_image(slug, w.get("cover"))
+        store.remove_image(slug, w.get("cover_still"))
+        store.put_work(slug, {"cover_still": None})
     elif what == "download":
         store.remove_download(slug)
     else:

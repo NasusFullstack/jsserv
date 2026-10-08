@@ -6,14 +6,6 @@
   50%  { transform: translate3d(6vw, -4vh, 0) scale(1.15); }
   100% { transform: translate3d(-5vw, 6vh, 0) scale(.92); }
 }
-@keyframes grain {
-  0%   { background-position: 0 0, 0 0; }
-  20%  { background-position: 0 0, -40px 30px; }
-  40%  { background-position: 0 0, 30px -60px; }
-  60%  { background-position: 0 0, -70px -20px; }
-  80%  { background-position: 0 0, 50px 70px; }
-  100% { background-position: 0 0, 0 0; }
-}
 @keyframes ping {
   0%   { transform: scale(1); opacity: .9; }
   100% { transform: scale(3.2); opacity: 0; }

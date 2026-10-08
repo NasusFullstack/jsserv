@@ -7,6 +7,7 @@ export function startPulse(canvas) {
   const seen = visibility(canvas);
   let W = 0, H = 0, dpr = 1;
   const SPEED = 60;            // px/초
+  const FPS = 30;              // 가볍게: 초당 30번만 그린다
   let samples = [];            // 화면 오른쪽 끝에서 생긴 높이들
   let beat = null;             // 진행 중인 맥박 { t, amp }
   let t = 0;
@@ -44,17 +45,18 @@ export function startPulse(canvas) {
     g.addColorStop(0, 'rgba(94,234,212,0)');
     g.addColorStop(.6, 'rgba(94,234,212,.7)');
     g.addColorStop(1, 'rgba(167,139,250,1)');
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = 'rgba(94,234,212,.8)';
-    ctx.shadowBlur = 10;
+    // 빛 번짐은 그림자 흐림(무거움) 대신 굵고 옅은 선을 한 번 더 그어서
     ctx.beginPath();
     samples.forEach((v, i) => {
       const x = i * 2, y = mid - v * H * .5;
       if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
     });
+    ctx.strokeStyle = 'rgba(94,234,212,.14)';
+    ctx.lineWidth = 7;
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 2;
+    ctx.stroke();
     // 앞머리 점
     const last = samples[samples.length - 1];
     ctx.fillStyle = '#a78bfa';
@@ -63,9 +65,13 @@ export function startPulse(canvas) {
     ctx.fill();
   };
 
-  let acc = 0;
+  let acc = 0, wait = 0;
   const frame = (dt) => {
     if (!seen.on) return;
+    wait += dt;
+    if (wait < 1 / FPS) return;
+    dt = wait;
+    wait = 0;
     t += dt;
     acc += dt * SPEED / 2;
     while (acc >= 1) {
