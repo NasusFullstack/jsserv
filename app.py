@@ -4,7 +4,7 @@
 "여기 무엇이 올라와 있는가"만 알려준다. 그래서 기능을 하나 더 붙일 때 이 파일을 거의
 안 건드린다 - `features/` 에 파일 하나 만들고 아래 표에 한 줄 추가하면 끝이다.
 
-    /                브라우저면 포트폴리오 첫 화면, 프로그램이면 무엇이 올라와 있는지(JSON)
+    /                첫 화면. JSON 을 원한다고 밝히면(Accept: application/json) 무엇이 올라와 있는지
     /health          살아있는지
     /w/ /p/ /dl/ /admin /api/…   포트폴리오 사이트 (features/site/)
     /battle/...      춥채팅 배틀크루저 전투 중계 (features/battle.py)
@@ -54,6 +54,8 @@ for feature in FEATURES:
 app.add_middleware(site.TrackMiddleware)
 # 수집 로봇 막기·너무 잦은 요청 쉬게 하기 (가장 바깥 = 맨 먼저 검사, 막힌 요청은 방문으로도 안 셈)
 app.add_middleware(site.BotGuard)
+# 겹친 슬래시(//) 주소를 하나로 고쳐 보내기 (nginx 가 http→https 로 넘길 때 첫 화면을 // 로 보냄)
+app.add_middleware(site.PathTidy)
 site.configure(SERVER_NAME, SERVER_VERSION, lambda: _feature_list())
 
 
@@ -67,7 +69,8 @@ def now() -> str:
 
 @app.get("/")
 def index(request: Request):
-    """브라우저(사람)에게는 포트폴리오 첫 화면, 프로그램에게는 여기 무엇이 올라와 있는지(JSON)."""
+    """브라우저·검색엔진·미리보기 로봇에게는 첫 화면, JSON 만 원한다고 밝힌 프로그램에게는 여기 무엇이 올라와 있는지(JSON).
+    (Accept: application/json 또는 /?format=json)"""
     if site.wants_page(request):
         return site.home_page()
     return JSONResponse({

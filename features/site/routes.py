@@ -147,7 +147,12 @@ def _remove(path):
 
 # ---- 화면 ----
 def wants_page(request):
-    return "text/html" in request.headers.get("accept", "")
+    """첫 화면(/)을 화면으로 줄지. 브라우저·검색엔진·링크 미리보기 로봇은 "아무거나(*/*)"라고 묻는 경우가 많아서
+    기본은 화면이고, JSON 만 원한다고 분명히 말한 프로그램(Accept: application/json 또는 ?format=json)에게만 JSON."""
+    if request.query_params.get("format") == "json":
+        return False
+    accept = request.headers.get("accept", "")
+    return not ("application/json" in accept and "text/html" not in accept)
 
 
 def _brand_image(s):
@@ -698,3 +703,25 @@ async def _plain(send, status, text, extra=None):
     head += [(k.encode(), v.encode()) for k, v in (extra or {}).items()]
     await send({"type": "http.response.start", "status": status, "headers": head})
     await send({"type": "http.response.body", "body": body})
+
+
+class PathTidy:
+    """주소의 겹친 슬래시(//)를 하나로 고쳐 보낸다. nginx 가 http → https 로 넘길 때 첫 화면을 // 로 보내서
+    (https://jsserv.pdlab.kr//) 404 가 나던 것 — 검색엔진 확인·북마크가 거기서 막히지 않게."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] == "http" and "//" in path and scope.get("method") in ("GET", "HEAD"):
+            clean = "/" + "/".join(p for p in path.split("/") if p)
+            if path.endswith("/") and clean != "/":
+                clean += "/"
+            qs = scope.get("query_string", b"").decode("latin-1")
+            target = (clean + ("?" + qs if qs else "")).encode("latin-1", "replace")
+            await send({"type": "http.response.start", "status": 301,
+                        "headers": [(b"location", target), (b"content-length", b"0"), (b"cache-control", b"public, max-age=86400")]})
+            await send({"type": "http.response.body", "body": b""})
+            return
+        await self.app(scope, receive, send)

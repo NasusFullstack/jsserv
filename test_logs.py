@@ -186,8 +186,8 @@ status = client.get("/logs").json()
 check(f"한도를 밖에서 볼 수 있다({sorted(status['limits'])[:3]})",
       status["limits"]["keep_hours"] == 24, status)
 check("서버가 이 기능을 알려준다",
-      any(f["name"] == "logs" for f in client.get("/").json()["features"]),
-      client.get("/").json()["features"])
+      any(f["name"] == "logs" for f in client.get("/", headers={"Accept": "application/json"}).json()["features"]),
+      client.get("/", headers={"Accept": "application/json"}).json()["features"])
 
 shutil.rmtree(WORK, ignore_errors=True)
 

@@ -24,12 +24,12 @@
 서버의 영구 보존 폴더 `/data/jsserv/site` (없으면 `~/.jsserv/site`, 환경 변수 `JSSERV_SITE_DIR` 이 이김).
 배포해도 지워지지 않는다.
 """
-from .routes import BotGuard, TrackMiddleware, configure, home_page, router, wants_page  # noqa: F401
+from .routes import BotGuard, PathTidy, TrackMiddleware, configure, home_page, router, wants_page  # noqa: F401
 from .routes_comments import router as _comments_router
 
 router.include_router(_comments_router)
 
 NAME = "site"
 PREFIX = ""
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 ABOUT = "포트폴리오 사이트 (작품·방문 통계·관리)"

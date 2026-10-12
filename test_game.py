@@ -88,7 +88,7 @@ r2 = client.get("/game/js/game.js")
 check("다시 올리면 통째로 바뀐다(옛 파일은 사라짐)", client.get("/game/").text == "<title>새 버전</title>" and r2.status_code == 404, r2.status_code)
 check("바꿔 끼우고 남은 임시 폴더가 없다", sorted(os.listdir(WORK)) == ["game"], os.listdir(WORK))
 
-r = client.get("/")
+r = client.get("/", headers={"Accept": "application/json"})
 check("루트에 game 기능이 보인다", "game" in [f["name"] for f in r.json()["features"]])
 
 # ---- 그림 캐시: ?v=지문 이 붙으면 오래, 없으면 잠깐 ----

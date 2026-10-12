@@ -111,6 +111,14 @@ r = client.put("/api/admin/settings", headers=KEY, json={"name": "NasusFullstack
 page = get("/").text
 check("구글 확인 코드: 태그째 붙여도 값만 저장", r.status_code == 200 and r.json()["site"]["google_verify"] == "abc_DEF-123456", r.text)
 check("확인 코드가 페이지 머리에", meta(page, "google-site-verification") == "abc_DEF-123456" and meta(page, "naver-site-verification") == "naver0123456789")
+for acc in ("*/*", None):
+    hdr = {"User-Agent": "Mozilla/5.0 (compatible; Google-Site-Verification/1.0)", "Accept": acc} if acc else {"User-Agent": "Mozilla/5.0 (compatible; Google-Site-Verification/1.0)"}
+    rr = client.get("/", headers=hdr)
+    check("구글 확인 로봇이 Accept %s 로 물어도 화면(확인 태그)을 받는다" % (acc or "없음"),
+          "text/html" in rr.headers["content-type"] and meta(rr.text, "google-site-verification") == "abc_DEF-123456", rr.headers["content-type"])
+rr = client.get("/", headers={"User-Agent": "kakaotalk-scrap/1.0", "Accept": "*/*"})
+check("카톡 미리보기 로봇이 */* 로 물어도 간판을 받는다", meta(rr.text, "og:site_name") == "NasusFullstack", rr.headers["content-type"])
+check("JSON 은 원한다고 밝혀야만 (?format=json)", client.get("/?format=json").headers["content-type"].startswith("application/json"))
 r = client.put("/api/admin/settings", headers=KEY, json={"name": "NasusFullstack", "google_verify": '"><script>x</script>'})
 check("이상한 확인 코드는 거절", r.status_code == 400, r.status_code)
 
@@ -150,6 +158,12 @@ after_human = client.get("/api/overview").json()["stats"]["today"]["views"]
 check("막힌 로봇은 방문으로 안 세고, 사람은 센다", after_bots == before and after_human == before + 1, (before, after_bots, after_human))
 check("춥채팅 앱이 쓰는 주소는 검사하지 않는다(로봇 이름이어도)", get("/profiles", ua=GPT, html=False).status_code != 403 and get("/health", ua=GPT, html=False).status_code == 200)
 check("프로그램(파이썬·curl)은 그대로", get("/", ua="Python-urllib/3.13", html=False).status_code == 200 and get("/robots.txt", ua="curl/8.4", html=False).status_code == 200)
+
+# ---- 겹친 슬래시 ----
+r = client.get("http://testserver//", follow_redirects=False)
+check("// 는 / 로 고쳐 보낸다 (nginx http→https 가 // 로 보내던 것)", r.status_code == 301 and r.headers["location"] == "/", (r.status_code, r.headers.get("location")))
+r = client.get("http://testserver//w//danmak?x=1", follow_redirects=False)
+check("겹친 슬래시는 어디든 하나로 (뒤 물음표는 그대로)", r.status_code == 301 and r.headers["location"] == "/w/danmak?x=1", r.headers.get("location"))
 
 # ---- 너무 잦은 요청 ----
 codes = [get("/", ip="9.9.9.9").status_code for _ in range(125)]

@@ -74,8 +74,8 @@ releases.fetch = lambda repo: {
 }
 
 # ---- 첫 화면 ----
-r = client.get("/")
-check("프로그램에게는 / 가 그대로 JSON", r.headers["content-type"].startswith("application/json") and "features" in r.json(), r.text[:80])
+r = client.get("/", headers={"Accept": "application/json"})
+check("JSON 을 원한다고 밝힌 프로그램에게는 / 가 JSON", r.headers["content-type"].startswith("application/json") and "features" in r.json(), r.text[:80])
 check("기능 목록에 site 가 있다", any(f["name"] == "site" for f in r.json()["features"]), r.json())
 r = visit("/")
 check("브라우저에게는 / 가 첫 화면", r.status_code == 200 and "text/html" in r.headers["content-type"], r.status_code)
@@ -102,7 +102,7 @@ check("같은 사람은 하루 한 번, 페이지뷰는 매번", after["visitors
 visit("/", ip="4.4.4.4", ua="Googlebot/2.1")
 visit("/", ip="5.5.5.5", ua="curl/8.0")
 check("검색 로봇·curl 은 안 센다", today()["visitors"] == after["visitors"], today())
-client.get("/", headers={"X-Forwarded-For": "6.6.6.6", "User-Agent": "Mozilla/5.0"})   # JSON 요청
+client.get("/", headers={"X-Forwarded-For": "6.6.6.6", "User-Agent": "Mozilla/5.0", "Accept": "application/json"})   # JSON 요청
 check("JSON 으로 물어본 것은 방문이 아니다", today()["visitors"] == after["visitors"], today())
 db = sqlite3.connect(os.path.join(WORK, "site", "stats.sqlite3"))
 dump = "\n".join(str(row) for t in ("daily", "seen", "refs", "meta") for row in db.execute("SELECT * FROM %s" % t))

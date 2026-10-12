@@ -173,8 +173,8 @@ check("아이콘만 바꿔도 프로그램 정보가 남는다",
       after["client"].get("platform") == "mobile", after)
 
 check("서버가 이 기능을 알려준다",
-      any(f["name"] == "profiles" for f in client.get("/").json()["features"]),
-      client.get("/").json()["features"])
+      any(f["name"] == "profiles" for f in client.get("/", headers={"Accept": "application/json"}).json()["features"]),
+      client.get("/", headers={"Accept": "application/json"}).json()["features"])
 
 shutil.rmtree(WORK, ignore_errors=True)
 
