@@ -142,6 +142,27 @@ def remove_image(slug, name):
         os.remove(path)
 
 
+def write_media(slug, name, data):
+    """이름을 정해서 그림 파일 하나를 쓴다(링크 미리보기처럼 다시 만들 수 있는 것)."""
+    folder = inside(C.MEDIA, slug)
+    os.makedirs(folder, exist_ok=True)
+    part = os.path.join(folder, name + ".part")
+    with open(part, "wb") as f:
+        f.write(data)
+    os.replace(part, os.path.join(folder, name))
+
+
+def remove_media_prefix(slug, prefix):
+    folder = inside(C.MEDIA, slug)
+    if folder and os.path.isdir(folder):
+        for f in os.listdir(folder):
+            if f.startswith(prefix):
+                try:
+                    os.remove(os.path.join(folder, f))
+                except OSError:
+                    pass
+
+
 def image_path(slug, name):
     path = inside(C.MEDIA, slug, name)
     return path if path and os.path.isfile(path) else None

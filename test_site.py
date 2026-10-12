@@ -148,7 +148,7 @@ check("숨긴 작품도 관리 화면엔 나온다", "my-game" in [w["slug"] for
 check("숨긴 작품 주소(/w/)는 첫 화면으로 돌려보낸다", visit("/w/my-game").status_code == 307)
 client.put("/api/admin/works/my-game", headers=KEY, json={"title": "내 게임", "tagline": "링크 미리보기", "hidden": False})
 r = visit("/w/my-game")
-check("작품 주소(/w/)는 그 작품 제목이 미리보기로", r.status_code == 200 and "내 게임 · NasusFullstack" in r.text and "링크 미리보기" in r.text, r.text[:300])
+check("작품 주소(/w/)는 그 작품 제목이 미리보기로", r.status_code == 200 and "내 게임 — NasusFullstack" in r.text and "링크 미리보기" in r.text, r.text[:300])
 
 # ---- 그림 ----
 r = client.post("/api/admin/works/my-game/cover", content=b"not an image", headers=KEY)

@@ -52,6 +52,8 @@ for feature in FEATURES:
 
 # 사이트가 방문·플레이·다운로드를 센다(응답이 나간 뒤에). 무엇이 올라와 있는지는 여기서 알려 준다.
 app.add_middleware(site.TrackMiddleware)
+# 수집 로봇 막기·너무 잦은 요청 쉬게 하기 (가장 바깥 = 맨 먼저 검사, 막힌 요청은 방문으로도 안 셈)
+app.add_middleware(site.BotGuard)
 site.configure(SERVER_NAME, SERVER_VERSION, lambda: _feature_list())
 
 

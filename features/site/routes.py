@@ -9,8 +9,12 @@
     GET  /dl/<작품>             다운로드 (올려 둔 파일)
     GET  /dl/<작품>/a/<파일>    GitHub 릴리스 파일로 넘겨줌 (받은 사람을 세고 나서)
     GET  /p/<작품>/...          올려 둔 웹 빌드 (브라우저에서 바로 플레이)
+    GET  /robots.txt · /sitemap.xml · /site.webmanifest · /favicon.ico   검색엔진·브라우저용 (seo.py)
+    GET  /og/site.jpg           간판 그림 (링크 미리보기, 관리 화면에서 바꿈)
+    GET  /og/<작품>.jpg         작품 링크 미리보기 그림 (대표 그림에서 1200×630 JPEG 로 만들어 둠)
 
     (열쇠 X-Admin-Key)
+    POST   /api/admin/site/og                  간판 그림 올리기 (본문 = 그림)   DELETE 기본 그림으로
     GET    /api/admin/overview                 관리 화면이 그리는 모든 것
     PUT    /api/admin/settings                 사이트 설정
     PUT    /api/admin/works/<작품>             작품 만들기·고치기
@@ -32,7 +36,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import auth, comments, releases, service, stats, store
+from . import auth, bots, comments, releases, seo, service, stats, store
 from . import config as C
 from .service import Invalid
 
@@ -146,7 +150,20 @@ def wants_page(request):
     return "text/html" in request.headers.get("accept", "")
 
 
-def _page(name, title=None, desc=None, image=None, path="/"):
+def _brand_image(s):
+    """간판 그림 주소: 관리 화면에서 올린 것이 있으면 그것, 없으면 기본 그림."""
+    if s.get("og_image") and store.image_path("_site", s["og_image"]):
+        return "/og/site.jpg?v=" + s["og_image"].split("-")[-1].split(".")[0]
+    return "/static/og.png"
+
+
+def _work_image(w, s):
+    if w.get("cover"):
+        return "/og/%s.jpg?v=%s" % (w["slug"], w["cover"].split("-")[-1].split(".")[0])
+    return _brand_image(s)
+
+
+def _page(name, title=None, desc=None, image=None, image_alt=None, path="/", og_type="website", jsonld="", works_html=""):
     try:
         with open(os.path.join(C.WEB, name), encoding="utf-8") as f:
             text = f.read()
@@ -154,20 +171,35 @@ def _page(name, title=None, desc=None, image=None, path="/"):
         return _err("화면 파일이 없습니다", 500)
     s = _settings()
     site = s.get("name") or "Portfolio"
-    fill = {
-        "{{TITLE}}": title or site,
-        "{{DESC}}": desc or s.get("headline") or "",
-        "{{IMAGE}}": SITE_URL + (image or "/static/og.png"),
+    fill = {     # 글자로 넣는 것 (태그 문자는 글자로 바뀜)
+        "{{TITLE}}": title or seo.site_title(s),
+        "{{DESC}}": desc or s.get("headline") or seo.DEFAULT_DESC,
+        "{{IMAGE}}": SITE_URL + (image or _brand_image(s)),
+        "{{IMAGE_ALT}}": image_alt or "%s 간판" % site,
         "{{URL}}": SITE_URL + path,
         "{{SITE}}": site,
+        "{{OG_TYPE}}": og_type,
+    }
+    raw = {      # 이미 안전하게 만든 HTML 조각 (seo.py 가 속을 다 escape 함)
+        "{{VERIFY}}": seo.verify_tags(s),
+        "{{JSONLD}}": jsonld,
+        "{{WORKS_SSR}}": works_html,
     }
     for k, v in fill.items():
         text = text.replace(k, html.escape(v, quote=True))
+    for k, v in raw.items():
+        text = text.replace(k, v)
     return HTMLResponse(text, headers=PAGE_HEADERS)
 
 
+def _public_works():
+    return [w for w in _works() if not w.get("hidden")]
+
+
 def home_page():
-    return _page("index.html")
+    s = _settings()
+    works = _public_works()
+    return _page("index.html", jsonld=seo.home_ld(s, SITE_URL, works), works_html=seo.works_html(works))
 
 
 @router.get("/w/{slug}")
@@ -175,9 +207,12 @@ def work_page(slug: str):
     w = _public(slug)
     if not w:
         return RedirectResponse("/", status_code=307)
-    site = _settings().get("name") or ""
-    return _page("index.html", title="%s · %s" % (w.get("title", slug), site), desc=w.get("tagline"),
-                 image=service.media_url(slug, w.get("cover")), path="/w/" + slug)
+    s = _settings()
+    image = _work_image(w, s)
+    pub = dict(w, play=service.play_url(w))
+    return _page("index.html", title=seo.work_title(w, s), desc=seo.work_desc(w), image=image,
+                 image_alt="%s 대표 그림" % (w.get("title") or slug), path="/w/" + slug, og_type="article",
+                 jsonld=seo.work_ld(pub, s, SITE_URL, SITE_URL + image), works_html=seo.works_html(_public_works()))
 
 
 @router.get("/admin")
@@ -198,15 +233,58 @@ def static(rel: str):
 
 @router.get("/favicon.ico")
 def favicon():
+    ico = os.path.join(C.WEB, "static", "icons", "favicon.ico")
+    if os.path.isfile(ico):
+        return FileResponse(ico, media_type="image/x-icon", headers={"Cache-Control": "public, max-age=86400"})
     return FileResponse(os.path.join(C.WEB, "static", "favicon.svg"), media_type="image/svg+xml",
                         headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/robots.txt")
 def robots():
-    lines = ["User-agent: *", "Allow: /"] + ["Disallow: " + p for p in
-                                           ("/admin", "/api/", "/dl/", "/files/", "/logs/", "/profiles/", "/battle")]
-    return Response("\n".join(lines) + "\n", media_type="text/plain")
+    return Response(seo.robots_txt(SITE_URL), media_type="text/plain; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/sitemap.xml")
+def sitemap():
+    return Response(seo.sitemap_xml(SITE_URL, _public_works()), media_type="application/xml; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/site.webmanifest")
+def webmanifest():
+    return JSONResponse(seo.manifest(_settings()), media_type="application/manifest+json",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/og/site.jpg")
+def og_site():
+    s = _settings()
+    path = store.image_path("_site", s.get("og_image") or "") if s.get("og_image") else None
+    if path:
+        return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+    return FileResponse(os.path.join(C.WEB, "static", "og.png"), media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/og/{slug}.jpg")
+async def og_work(slug: str):
+    """작품 링크 미리보기 그림. 처음 요청 때 대표 그림에서 만들어 두고 다음부터는 그대로 준다."""
+    w = _public(slug)
+    cover = store.image_path(slug, w.get("cover")) if w and w.get("cover") else None
+    if not cover:
+        return og_site()
+    name = "og-%s.jpg" % os.path.splitext(w["cover"])[0]
+    path = store.image_path(slug, name)
+    if not path:
+        try:
+            data = await run_in_threadpool(service.og_from_file, cover)
+        except Exception:      # noqa: BLE001 - 못 만들면 간판 그림으로
+            return og_site()
+        store.write_media(slug, name, data)
+        path = store.image_path(slug, name)
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---- 공개 API ----
@@ -331,8 +409,42 @@ async def admin_settings(request: Request):
         clean = service.clean_settings(await request.json())
     except ValueError as e:   # Invalid 와 JSON 깨짐 둘 다
         return _err(str(e) if isinstance(e, Invalid) else "JSON 이 아닙니다", 400)
+    clean["og_image"] = _settings().get("og_image")     # 간판 그림은 따로 올리고 지운다
     store.save_settings(clean)
     return {"ok": True, "site": clean}
+
+
+@router.post("/api/admin/site/og")
+async def admin_site_og(request: Request):
+    """간판 그림(링크 미리보기에 뜨는 그림) 올리기 → 1200×630 JPEG 로 맞춰 보관."""
+    denied = _admin(request)
+    if denied:
+        return denied
+    data = await _read_body(request, C.MAX_IMAGE)
+    if data is None:
+        return _err("그림이 너무 큽니다 (%d MB 까지)" % (C.MAX_IMAGE >> 20), 413)
+    try:
+        jpeg = await run_in_threadpool(service.prepare_og, data)
+    except Invalid as e:
+        return _err(str(e), 400)
+    s = _settings()
+    name = store.save_image("_site", "og", ".jpg", jpeg)
+    store.remove_image("_site", s.get("og_image"))
+    s["og_image"] = name
+    store.save_settings(s)
+    return {"ok": True, "site": s, "image": _brand_image(s)}
+
+
+@router.delete("/api/admin/site/og")
+def admin_site_og_delete(request: Request):
+    denied = _admin(request)
+    if denied:
+        return denied
+    s = _settings()
+    store.remove_image("_site", s.get("og_image"))
+    s["og_image"] = None
+    store.save_settings(s)
+    return {"ok": True, "site": s, "image": _brand_image(s)}
 
 
 @router.put("/api/admin/works/{slug}")
@@ -391,6 +503,7 @@ async def admin_cover(slug: str, request: Request):
     still = store.save_image(slug, "still", ".webp", still_bytes) if still_bytes else None
     store.remove_image(slug, w.get("cover"))
     store.remove_image(slug, w.get("cover_still"))
+    store.remove_media_prefix(slug, "og-")       # 옛 링크 미리보기 그림 (새 그림으로 다시 만든다)
     w = store.put_work(slug, {"cover": name, "cover_still": still})
     return {"ok": True, "work": service.admin_work(w, {})}
 
@@ -496,6 +609,7 @@ def admin_remove_file(slug: str, what: str, request: Request):
     if what == "cover":
         store.remove_image(slug, w.get("cover"))
         store.remove_image(slug, w.get("cover_still"))
+        store.remove_media_prefix(slug, "og-")
         store.put_work(slug, {"cover_still": None})
     elif what == "download":
         store.remove_download(slug)
@@ -535,3 +649,52 @@ class TrackMiddleware:
                                         service.ref_host(headers))
         except Exception:     # noqa: BLE001 - 통계 때문에 사이트가 죽으면 안 된다
             pass
+
+
+# ---- 로봇 막기 ----
+# 앱·도구가 쓰는 주소는 검사하지 않는다 (춥채팅 앱의 파일·기록·프로필, 게임 올리기 도구, 살아 있는지 확인)
+GUARD_SKIP = ("/files", "/logs", "/profiles", "/battle", "/chat", "/health", "/robots.txt",
+              "/game/upload", "/game/originals")
+# 한 주소에서 1분에 이보다 많이 열면 잠시 쉬게 한다 (검색엔진·링크 미리보기는 빼고)
+_page_limit = bots.RateLimit(120)      # 페이지 (/, /w/…)
+_misc_limit = bots.RateLimit(900)      # 그림·자료 (/media, /og, /api/…)
+
+
+class BotGuard:
+    """수집 로봇은 사이트 주소에서 403, 한 주소가 너무 자주 열면 429. 사람·앱은 그대로 지나간다."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("path", "").startswith(GUARD_SKIP):
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        agent = headers.get("user-agent", "")
+        kind = bots.classify(agent)
+        if kind in ("bad", "bot"):
+            await _plain(send, 403, "로봇 접근은 받지 않습니다.\n")
+            return
+        if kind is None and scope.get("method") == "GET":
+            ip = service.client_ip(headers, (scope.get("client") or (None,))[0])[0]
+            if path == "/" or path.startswith("/w/"):
+                over = _page_limit.over(ip)
+            elif path.startswith(("/media/", "/og/", "/api/", "/sitemap.xml", "/dl/")):
+                over = _misc_limit.over(ip)
+            else:
+                over = False
+            if over:
+                await _plain(send, 429, "너무 자주 열었습니다. 1분 뒤에 다시 와 주세요.\n", {"retry-after": "60"})
+                return
+        await self.app(scope, receive, send)
+
+
+async def _plain(send, status, text, extra=None):
+    body = text.encode("utf-8")
+    head = [(b"content-type", b"text/plain; charset=utf-8"), (b"content-length", str(len(body)).encode()),
+            (b"x-robots-tag", b"noindex"), (b"cache-control", b"no-store")]
+    head += [(k.encode(), v.encode()) for k, v in (extra or {}).items()]
+    await send({"type": "http.response.start", "status": status, "headers": head})
+    await send({"type": "http.response.body", "body": body})

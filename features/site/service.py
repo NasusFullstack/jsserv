@@ -37,6 +37,7 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,80}$")
+VERIFY_RE = re.compile(r"^[A-Za-z0-9_-]{4,120}$")
 
 
 class Invalid(ValueError):
@@ -134,14 +135,23 @@ def clean_settings(data):
     email = _text(data, "email", 120)
     if email and not EMAIL_RE.match(email):
         raise Invalid("메일 주소 꼴이 아닙니다")
-    return {
+    verify = {}
+    for key, label in (("google_verify", "구글 확인 코드"), ("naver_verify", "네이버 확인 코드")):
+        v = _text(data, key, 120)
+        if v.startswith("<"):                      # 메타 태그를 통째로 붙여 넣어도 content 값만 뽑는다
+            m = re.search(r'content="([^"]*)"', v)
+            v = m.group(1).strip() if m else ""
+        if v and not VERIFY_RE.match(v):
+            raise Invalid("%s 는 영문·숫자·-·_ 만 됩니다" % label)
+        verify[key] = v
+    return dict({
         "name": _text(data, "name", 40, required=True),
         "headline": _text(data, "headline", 100),
         "about": _text(data, "about", 800),
         "roles": _list(data, "roles", 8, 16),
         "email": email,
         "github": _url(data, "github"),
-    }
+    }, **verify)
 
 
 def sort_works(items):
@@ -329,6 +339,45 @@ def still_of(data):
         return out.getvalue()
     except Exception:
         return None
+
+
+OG_SIZE = (1200, 630)    # 링크 미리보기 그림 크기 (카톡·페북·트위터 공통 권장)
+
+
+def og_jpeg(im):
+    """그림 → 1200×630 JPEG (가운데를 기준으로 꽉 차게 잘라 냄). 움직이는 그림이면 첫 장."""
+    from PIL import Image, ImageOps
+    try:
+        im.seek(0)
+    except Exception:
+        pass
+    frame = im.convert("RGBA")
+    flat = Image.new("RGB", frame.size, (5, 6, 10))
+    flat.paste(frame, mask=frame.split()[-1])
+    fitted = ImageOps.fit(flat, OG_SIZE, method=Image.LANCZOS, centering=(0.5, 0.45))
+    out = io.BytesIO()
+    fitted.save(out, "JPEG", quality=88, optimize=True, progressive=True)
+    return out.getvalue()
+
+
+def prepare_og(data):
+    """관리 화면에서 올린 간판 그림 → 1200×630 JPEG."""
+    if not sniff_image(data):
+        raise Invalid("그림 파일(PNG·JPG·WebP·GIF)이 아닙니다")
+    try:
+        from PIL import Image
+        return og_jpeg(Image.open(io.BytesIO(data)))
+    except Invalid:
+        raise
+    except Exception:
+        raise Invalid("그림을 읽을 수 없습니다")
+
+
+def og_from_file(path):
+    """작품 대표 그림 파일 → 링크 미리보기용 JPEG (카톡 등은 WebP·움직이는 그림을 잘 못 보여 줘서)."""
+    from PIL import Image
+    with Image.open(path) as im:
+        return og_jpeg(im)
 
 
 # ---- 다운로드 파일 이름 ----

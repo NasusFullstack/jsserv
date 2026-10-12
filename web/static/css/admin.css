@@ -249,3 +249,10 @@
 .admin-c__body b { color: var(--mint); }
 .admin-c__tools { display: flex; gap: 8px; margin-top: 8px; }
 .admin-reply { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; align-items: flex-end; }
+
+/* ---- 간판 그림 ---- */
+.brand-box { margin-bottom: 18px; }
+.brand-box__row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.brand-box__img { aspect-ratio: 1200 / 630; }
+.brand-box__side { display: flex; flex-direction: column; gap: 10px; }
+@media (max-width: 900px) { .brand-box__row { grid-template-columns: 1fr; } }

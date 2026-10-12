@@ -3,17 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- ===== 간판 (브라우저 탭·검색 결과·링크 미리보기). 값은 서버가 채운다: features/site/seo.py ===== -->
 <title>{{TITLE}}</title>
 <meta name="description" content="{{DESC}}">
+<link rel="canonical" href="{{URL}}">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="application-name" content="{{SITE}}">
+<meta name="apple-mobile-web-app-title" content="{{SITE}}">
+<meta name="author" content="{{SITE}}">
 <meta name="theme-color" content="#05060a">
-<meta property="og:type" content="website">
+<meta property="og:type" content="{{OG_TYPE}}">
+<meta property="og:locale" content="ko_KR">
 <meta property="og:site_name" content="{{SITE}}">
 <meta property="og:title" content="{{TITLE}}">
 <meta property="og:description" content="{{DESC}}">
-<meta property="og:image" content="{{IMAGE}}">
 <meta property="og:url" content="{{URL}}">
+<meta property="og:image" content="{{IMAGE}}">
+<meta property="og:image:secure_url" content="{{IMAGE}}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{IMAGE_ALT}}">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{TITLE}}">
+<meta name="twitter:description" content="{{DESC}}">
+<meta name="twitter:image" content="{{IMAGE}}">
+<meta name="twitter:image:alt" content="{{IMAGE_ALT}}">
+{{VERIFY}}
+<link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="sitemap" type="application/xml" href="/sitemap.xml">
+<script type="application/ld+json">{{JSONLD}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -111,7 +133,8 @@
       </div>
       <div class="chips" id="chips" role="tablist" aria-label="종류"></div>
     </header>
-    <div class="works" id="worksGrid" aria-live="polite"></div>
+    <!-- 자바스크립트 없이도(검색엔진·느린 연결) 작품 링크가 보이게 서버가 채워 둔다. 화면이 뜨면 home/works.js 가 카드로 바꾼다 -->
+    <div class="works" id="worksGrid" aria-live="polite">{{WORKS_SSR}}</div>
   </section>
 
   <!-- ===== 03 서버 ===== -->

@@ -612,3 +612,17 @@
   .cform__who { grid-template-columns: 1fr; }
   .c__replies { margin-left: 4px; padding-left: 12px; }
 }
+
+/* ---- 자바스크립트 전 작품 목록 (서버가 채움, seo.py works_html) ---- */
+.ssr-work {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--ink-2);
+}
+.ssr-work strong { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -.02em; }
+.ssr-work span:first-of-type { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }

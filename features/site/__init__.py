@@ -8,6 +8,8 @@
     store.py     저장 - 작품 목록·설정 JSON, 그림·다운로드·웹 빌드 파일
     stats.py     통계 - 방문·플레이·다운로드 (SQLite, IP 는 저장 안 함)
     auth.py      열쇠 - 관리 기능 잠금
+    bots.py      로봇 - 검색·링크 미리보기는 들이고 AI 학습·SEO 수집 로봇은 막음
+    seo.py       간판·검색 - 페이지 머리 간판, 구글 구조화 정보, robots.txt, 사이트맵, manifest
     releases.py  바깥 연결 - GitHub 최신 릴리스 (작품에 저장소를 적어 두면 버전·다운로드가 따라 바뀜)
     comments.py  댓글 저장 - 작품마다 본댓·답글 (SQLite, 비밀번호는 지문만)
     comment_rules.py  댓글 규칙 - 올바른 댓글인지, 깊이 2 늘어놓기(@닉네임 답글은 그 글 바로 밑)
@@ -22,12 +24,12 @@
 서버의 영구 보존 폴더 `/data/jsserv/site` (없으면 `~/.jsserv/site`, 환경 변수 `JSSERV_SITE_DIR` 이 이김).
 배포해도 지워지지 않는다.
 """
-from .routes import TrackMiddleware, configure, home_page, router, wants_page  # noqa: F401
+from .routes import BotGuard, TrackMiddleware, configure, home_page, router, wants_page  # noqa: F401
 from .routes_comments import router as _comments_router
 
 router.include_router(_comments_router)
 
 NAME = "site"
 PREFIX = ""
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 ABOUT = "포트폴리오 사이트 (작품·방문 통계·관리)"
