@@ -79,7 +79,7 @@ _carry_over_once()
 TOKEN_SHA256 = os.environ.get("JSSERV_GAME_TOKEN_SHA256", "22ab5feafcd3f8d0d9e6e3874ad7639a5e9204b483644e4d2761a5e0d634079d")
 
 # ---- 한도 (나중에 여기 숫자만 고치면 된다) ----
-MAX_ZIP = 80 * 1024 * 1024        # 올리는 zip 하나
+MAX_ZIP = 160 * 1024 * 1024       # 올리는 zip 하나 (2026-10-12: 80 → 160MB, 게임 그림이 늘어 101MB)
 MAX_FILES = 3000                   # zip 안 파일 수
 MAX_UNPACKED = 250 * 1024 * 1024   # 풀었을 때 전체 크기
 MAX_ORIG_ZIP = 300 * 1024 * 1024        # 원본 zip 하나 (나눠서 여러 번 올린다)
