@@ -56,6 +56,8 @@ app.add_middleware(site.TrackMiddleware)
 app.add_middleware(site.BotGuard)
 # 겹친 슬래시(//) 주소를 하나로 고쳐 보내기 (nginx 가 http→https 로 넘길 때 첫 화면을 // 로 보냄)
 app.add_middleware(site.PathTidy)
+# HEAD(있는지만 확인) 요청도 받기 — FastAPI 는 GET 주소에 HEAD 를 안 받아 405 가 났다
+app.add_middleware(site.HeadAsGet)
 site.configure(SERVER_NAME, SERVER_VERSION, lambda: _feature_list())
 
 

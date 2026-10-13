@@ -632,7 +632,7 @@ class TrackMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope.get("method") != "GET":
+        if scope["type"] != "http" or scope.get("method") != "GET" or scope.get("head"):
             await self.app(scope, receive, send)
             return
         status = {}
@@ -725,3 +725,23 @@ class PathTidy:
             await send({"type": "http.response.body", "body": b""})
             return
         await self.app(scope, receive, send)
+
+
+class HeadAsGet:
+    """HEAD(있는지만 확인하는 요청)를 GET 처럼 처리하고 본문만 뺀다. FastAPI 는 GET 주소에 HEAD 를 안 받아서
+    405 가 나던 것 — 검색엔진·링크 검사기 일부가 HEAD 로 먼저 물어본다. 방문으로는 세지 않는다(scope["head"])."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") != "HEAD":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_head(message):
+            if message["type"] == "http.response.body":
+                message = {"type": "http.response.body", "body": b"", "more_body": message.get("more_body", False)}
+            await send(message)
+
+        await self.app(dict(scope, method="GET", head=True), receive, send_head)

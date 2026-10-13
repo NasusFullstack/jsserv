@@ -165,6 +165,15 @@ check("// 는 / 로 고쳐 보낸다 (nginx http→https 가 // 로 보내던 �
 r = client.get("http://testserver//w//danmak?x=1", follow_redirects=False)
 check("겹친 슬래시는 어디든 하나로 (뒤 물음표는 그대로)", r.status_code == 301 and r.headers["location"] == "/w/danmak?x=1", r.headers.get("location"))
 
+# ---- HEAD ----
+for path in ("/sitemap.xml", "/robots.txt", "/", "/w/danmak", "/og/site.jpg", "/static/icons/icon-192.png"):
+    r = client.head(path, headers={"User-Agent": GOOGLE})
+    check("HEAD 로 물어도 200 (본문 없이): " + path, r.status_code == 200 and r.content == b"", (r.status_code, len(r.content)))
+before = client.get("/api/overview").json()["stats"]["today"]["views"]
+client.head("/", headers={"User-Agent": BROWSER, "Accept": "text/html", "X-Forwarded-For": "4.4.4.4"})
+check("HEAD 는 방문으로 안 센다", client.get("/api/overview").json()["stats"]["today"]["views"] == before)
+check("POST 같은 다른 요청은 그대로", client.post("/sitemap.xml").status_code == 405)
+
 # ---- 너무 잦은 요청 ----
 codes = [get("/", ip="9.9.9.9").status_code for _ in range(125)]
 check("한 주소가 1분에 120번 넘게 열면 잠시 막는다", codes[:120].count(200) == 120 and codes[-1] == 429, (codes.count(200), codes[-1]))
