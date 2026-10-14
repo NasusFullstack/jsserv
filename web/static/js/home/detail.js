@@ -112,9 +112,10 @@ function body(w) {
   return out.filter(Boolean);
 }
 
+// 릴리스 이름·날짜만 글자로 (GitHub 릴리스 페이지에는 소스 코드 받기가 자동으로 붙어서 링크하지 않음)
 function releaseFact(r) {
   return h('div', h('dt', '최신 릴리스'),
-    h('dd', h('a', { href: r.url, target: '_blank', rel: 'noopener', style: { color: 'var(--accent)' } }, `${r.tag} ↗`),
+    h('dd', h('span', { style: { color: 'var(--accent)' } }, r.tag),
       r.published ? h('span', { style: { display: 'block', 'font-weight': 400, color: 'var(--ink-3)', 'font-size': '12px' } }, date(r.published)) : null));
 }
 
