@@ -7,6 +7,7 @@ import io
 import os
 import re
 import zipfile
+from fnmatch import fnmatchcase
 from urllib.parse import quote, urlsplit
 
 from . import config as C
@@ -111,6 +112,10 @@ def clean_work(data):
         release = "/".join(release[len("https://github.com/"):].split("/")[:2])
     if release and not REPO_RE.match(release):
         raise Invalid("GitHub 릴리스는 주인/저장소 꼴입니다 (예: NasusFullstack/chat)")
+    files = _list(data, "release_files", 6, 80)
+    for rule in files:
+        if not rule.split("=", 1)[0].strip():
+            raise Invalid("릴리스 파일 줄은 「파일 이름 패턴 = 단추 이름」 꼴입니다 (예: *Setup.exe = 윈도우용 받기)")
     return {
         "title": _text(data, "title", 60, required=True),
         "kind": _text(data, "kind", 12) or "기타",
@@ -124,6 +129,7 @@ def clean_work(data):
         "play_url": _url(data, "play_url", allow_path=True),
         "source": _url(data, "source"),
         "release": release,
+        "release_files": files,
         "order": int(order),
         "hidden": bool(data.get("hidden", False)),
     }
@@ -169,7 +175,35 @@ def play_url(w):
     return w.get("play_url") or None
 
 
-def public_release(slug, info):
+# 프로그램이 스스로 업데이트할 때만 쓰는 릴리스 파일 (게임 묶음·업데이트 정보·서명) — 방문자용 다운로드 단추에서는 뺀다
+UPDATE_ONLY_RE = re.compile(r"(\.pck|\.sig|\.manifest\.json)$", re.IGNORECASE)
+
+
+def release_rules(rules):
+    """「패턴 = 단추 이름」 줄들 → [(패턴, 이름)]. 이름이 없으면 파일 이름을 그대로 단추에."""
+    out = []
+    for rule in rules or []:
+        pat, _, label = rule.partition("=")
+        if pat.strip():
+            out.append((pat.strip().lower(), label.strip()))
+    return out
+
+
+def pick_assets(assets, rules):
+    """방문자에게 보여 줄 릴리스 파일: 줄이 있으면 그 순서대로 맞는 파일만, 없으면 업데이트 전용 파일만 빼고 전부."""
+    rules = release_rules(rules)
+    if not rules:
+        return [(a, "") for a in assets if not UPDATE_ONLY_RE.search(a["name"])]
+    out, seen = [], set()
+    for pat, label in rules:
+        for a in assets:
+            if a["name"] not in seen and fnmatchcase(a["name"].lower(), pat):
+                seen.add(a["name"])
+                out.append((a, label))
+    return out
+
+
+def public_release(slug, info, rules=None):
     """GitHub 최신 릴리스 → 밖에 보일 꼴. 파일 주소는 우리 /dl/ 을 거치게 바꾼다(받은 사람을 세려고)."""
     if not info:
         return None
@@ -177,8 +211,8 @@ def public_release(slug, info):
         "tag": info["tag"],
         "url": info["url"],
         "published": info["published"],
-        "assets": [{"name": a["name"], "bytes": a["size"], "url": "/dl/%s/a/%s" % (slug, quote(a["name"]))}
-                   for a in info["assets"]],
+        "assets": [{"name": a["name"], "label": label, "bytes": a["size"], "url": "/dl/%s/a/%s" % (slug, quote(a["name"]))}
+                   for a, label in pick_assets(info["assets"], rules)],
     }
 
 
@@ -186,7 +220,7 @@ def public_work(w, counts, release=None):
     slug = w["slug"]
     dl = w.get("download")
     c = counts.get(slug, {})
-    rel = public_release(slug, release)
+    rel = public_release(slug, release, w.get("release_files"))
     return {
         "slug": slug,
         "title": w.get("title", slug),
@@ -215,6 +249,8 @@ def admin_work(w, counts, release=None):
     out = public_work(w, counts, release)
     out.update({"hidden": bool(w.get("hidden")), "order": w.get("order", 0), "play_url": w.get("play_url", ""),
                 "version_own": w.get("version", ""), "release_repo": w.get("release", ""),
+                "release_files": w.get("release_files", []),
+                "release_all": [a["name"] for a in (release or {}).get("assets", [])],
                 "build": w.get("build"), "created": w.get("created", "")})
     return out
 

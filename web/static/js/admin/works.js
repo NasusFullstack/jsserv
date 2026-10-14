@@ -63,6 +63,12 @@ function editor(w, limits, after) {
       hint: !v.release_repo ? '적어 두면 그 저장소의 최신 릴리스 파일이 다운로드 버튼으로 자동으로 나옵니다 (30분마다 확인)'
         : w?.release ? `지금 읽힌 최신: ${w.release.tag} · 파일 ${w.release.assets.length}개` : '아직 못 읽었습니다 (저장소 이름이나 공개 여부를 확인)',
     }),
+    field('보여 줄 릴리스 파일', 'release_files', (v.release_files || []).join('\n'), {
+      wide: true, area: true, max: 500,
+      placeholder: '*Setup.exe = 윈도우용 받기\n*.apk = 안드로이드용 받기',
+      hint: '한 줄에 하나, 「파일 이름 패턴 = 단추 이름」 (* 는 아무 글자). 비우면 업데이트 전용(.pck·.sig·manifest)만 빼고 전부'
+        + (v.release_all?.length ? ` · 지금 릴리스 파일: ${v.release_all.join(', ')}` : ''),
+    }),
     field('만든 해', 'year', v.year, { max: 10 }),
     field('순서', 'order', v.order ?? 0, { type: 'number' }),
     field('강조 색', 'accent', v.accent || '#5eead4', { type: 'color', hint: '카드 빛·그림 색' }),
@@ -84,6 +90,7 @@ function editor(w, limits, after) {
       year: f.get('year'), tagline: f.get('tagline'), desc: f.get('desc'),
       tags: String(f.get('tags') || '').split(',').map((x) => x.trim()).filter(Boolean),
       play_url: f.get('play_url'), source: f.get('source'), release: f.get('release'), accent: f.get('accent'),
+      release_files: String(f.get('release_files') || '').split('\n').map((x) => x.trim()).filter(Boolean),
       order: Number(f.get('order') || 0), hidden: f.get('hidden') === 'on',
     };
     saveBtn.disabled = true;

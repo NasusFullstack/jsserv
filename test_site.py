@@ -70,7 +70,9 @@ check("처음 받은 요청이 작품 주소여도 열린다(기본 작품을 �
 # 가짜 GitHub 릴리스
 releases.fetch = lambda repo: {
     "tag": "v2.7.1", "name": "", "url": "https://github.com/%s/releases/tag/v2.7.1" % repo, "published": "2026-10-01T00:00:00Z",
-    "assets": [{"name": "ChupChat.apk", "size": 1234, "url": "https://github.com/%s/releases/download/v2.7.1/ChupChat.apk" % repo}],
+    "assets": [{"name": "ChupChat.apk", "size": 1234, "url": "https://github.com/%s/releases/download/v2.7.1/ChupChat.apk" % repo}]
+    + [{"name": n, "size": 10, "url": "https://github.com/%s/releases/download/v2.7.1/%s" % (repo, n)}
+       for n in ("Game.pck", "Game.manifest.json", "Game.manifest.sig")],
 }
 
 # ---- 첫 화면 ----
@@ -91,6 +93,13 @@ check("처음엔 기본 작품 둘이 깔린다", slugs == ["danmak", "chupchat"
 chup = next(w for w in o["works"] if w["slug"] == "chupchat")
 check("GitHub 릴리스가 버전·다운로드로 나온다",
       chup["version"] == "v2.7.1" and chup["release"]["assets"][0]["url"] == "/dl/chupchat/a/ChupChat.apk", chup.get("release"))
+check("업데이트 전용 파일(.pck·.sig·manifest)은 다운로드 단추에서 빠진다",
+      [a["name"] for a in chup["release"]["assets"]] == ["ChupChat.apk"], chup.get("release"))
+from features.site import service as _svc  # noqa: E402
+_assets = [{"name": n, "size": 1} for n in ("FriendChat_GUI.zip", "FriendChat_Setup.exe", "ChupChat.apk")]
+_picked = [(a["name"], label) for a, label in _svc.pick_assets(_assets, ["*setup.EXE = 윈도우용 받기", "*.apk=안드로이드용 받기", "*.exe"])]
+check("보여 줄 파일 줄: 그 순서대로·맞는 것만·이름 붙여서(대소문자 무시, 겹치면 한 번)",
+      _picked == [("FriendChat_Setup.exe", "윈도우용 받기"), ("ChupChat.apk", "안드로이드용 받기")], _picked)
 
 # ---- 방문 세기 ----
 before = today()
@@ -200,6 +209,8 @@ visit("/dl/my-game", ip="8.8.4.4")
 check("다운로드는 하루 한 사람 한 번", today()["downloads"] - before == 2, (before, today()))
 r = visit("/dl/chupchat/a/ChupChat.apk", ip="8.8.8.8")
 check("GitHub 릴리스 파일은 세고 나서 넘겨준다", r.status_code == 302 and r.headers["location"].startswith("https://github.com/NasusFullstack/chat/releases/download/"), r.headers)
+r = client.get("/dl/chupchat/a/Game.pck", follow_redirects=False)
+check("단추에서 뺀 업데이트 파일도 주소로는 그대로 넘겨준다", r.status_code == 302 and r.headers["location"].endswith("/Game.pck"), r.headers)
 check("릴리스에 없는 파일 이름은 404", visit("/dl/chupchat/a/evil.exe").status_code == 404)
 
 # ---- 웹 빌드 ----

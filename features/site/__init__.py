@@ -31,5 +31,5 @@ router.include_router(_comments_router)
 
 NAME = "site"
 PREFIX = ""
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 ABOUT = "포트폴리오 사이트 (작품·방문 통계·관리)"

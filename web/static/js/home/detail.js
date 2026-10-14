@@ -80,8 +80,8 @@ function body(w) {
     w.play ? h('a.btn.btn--accent', { href: w.play, target: '_blank', rel: 'noopener' }, icon('play'), h('span', '플레이')) : null,
     w.download ? h('a.btn.btn--ghost', { href: w.download.url, download: '' }, icon('download'),
       h('span', `다운로드 · ${bytes(w.download.bytes)}`)) : null,
-    ...(w.release?.assets || []).map((a) => h('a.btn.btn--ghost', { href: a.url, title: `GitHub 릴리스 ${w.release.tag}` },
-      icon('download'), h('span', `${a.name} · ${bytes(a.bytes)}`))),
+    ...(w.release?.assets || []).map((a) => h('a.btn.btn--ghost', { href: a.url, title: `${a.name} · GitHub 릴리스 ${w.release.tag}` },
+      icon('download'), h('span', `${a.label || a.name} · ${bytes(a.bytes)}`))),
     w.source ? h('a.btn.btn--ghost', { href: w.source, target: '_blank', rel: 'noopener' }, icon('code'), h('span', '소스 코드')) : null,
     h('button.btn.btn--ghost.btn--sm', { onclick: () => share(w) }, icon('link'), h('span', '링크 복사')));
   actions.querySelectorAll('svg').forEach((s) => { s.style.cssText = 'width:18px;height:18px'; });
