@@ -5,6 +5,7 @@
 //   works.js      작품 편집과 파일 올리기
 //   comments.js   댓글 (작성자 답글·지우기)
 //   settings.js   사이트 설정
+//   dotpot.js     화분키우기 게임 서버 (설치본·재화 뿌리기·차단)
 
 import { $, $$, toast } from '../core/dom.js';
 import { AuthError, call, session } from './session.js';
@@ -12,8 +13,9 @@ import { renderDashboard } from './dashboard.js';
 import { renderWorks } from './works.js';
 import { renderSettings } from './settings.js';
 import { renderComments } from './comments.js';
+import { renderDotpot } from './dotpot.js';
 
-const views = { dash: renderDashboard, works: renderWorks, comments: renderComments, settings: renderSettings };
+const views = { dash: renderDashboard, works: renderWorks, comments: renderComments, settings: renderSettings, dotpot: renderDotpot };
 let current = 'dash';
 let data = null;
 

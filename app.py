@@ -13,6 +13,7 @@
     /logs/...        춥채팅 채팅 기록 하루치 (features/logs.py)
     /profiles/...    춥채팅 참여자 프로필 (features/profiles.py)
     /game/...        웹 게임 탄막게임 (features/game.py, 파일은 /data/jsserv/game)
+    /dotpot/api/...  화분키우기 게임 서버 - 꾸러미·뽑기·이벤트·차단 (features/dotpot/)
 
 실행 방법을 모르므로 두 가지를 다 받아둔다:
     uvicorn app:app --host 0.0.0.0 --port 8000
@@ -26,7 +27,7 @@ from fastapi.responses import JSONResponse
 
 # chat 은 지금 안 얹지만 **import 는 남겨둔다** - 되살릴 때 FEATURES 한 곳만
 # 고치면 되게(두 군데를 고쳐야 하면 한쪽을 빠뜨린다)
-from features import battle, chat, files, game, logs, profiles, site  # noqa: F401
+from features import battle, chat, dotpot, files, game, logs, profiles, site  # noqa: F401
 
 SERVER_NAME = "jsserv"
 SERVER_VERSION = "0.2.0"
@@ -42,7 +43,7 @@ SERVER_VERSION = "0.2.0"
 #   끄면 같이 사라지는 것: /chat 과 /chat/ws. 춥채팅 앱의 "춥채팅 서버" 쪽이
 #   안 붙는다 - IRC 쪽은 우리 서버를 안 거치므로 그대로 된다. 파일·프로필·기록·
 #   전투는 따로 돌아가므로 영향 없다.
-FEATURES = (battle, files, logs, profiles, game, site)
+FEATURES = (battle, files, logs, profiles, game, dotpot, site)
 
 # 설명서 화면도 주소 목록(openapi.json)도 밖에 안 보인다 - 관리 주소를 굳이 알려줄 이유가 없다
 app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, docs_url=None, redoc_url=None, openapi_url=None)

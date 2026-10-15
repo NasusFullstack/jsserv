@@ -657,9 +657,9 @@ class TrackMiddleware:
 
 
 # ---- 로봇 막기 ----
-# 앱·도구가 쓰는 주소는 검사하지 않는다 (춥채팅 앱의 파일·기록·프로필, 게임 올리기 도구, 살아 있는지 확인)
+# 앱·도구가 쓰는 주소는 검사하지 않는다 (춥채팅 앱의 파일·기록·프로필, 게임 올리기 도구, 화분키우기 게임, 살아 있는지 확인)
 GUARD_SKIP = ("/files", "/logs", "/profiles", "/battle", "/chat", "/health", "/robots.txt",
-              "/game/upload", "/game/originals")
+              "/game/upload", "/game/originals", "/dotpot/api")
 # 한 주소에서 1분에 이보다 많이 열면 잠시 쉬게 한다 (검색엔진·링크 미리보기는 빼고)
 _page_limit = bots.RateLimit(120)      # 페이지 (/, /w/…)
 _misc_limit = bots.RateLimit(900)      # 그림·자료 (/media, /og, /api/…)

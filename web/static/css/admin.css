@@ -256,3 +256,26 @@
 .brand-box__img { aspect-ratio: 1200 / 630; }
 .brand-box__side { display: flex; flex-direction: column; gap: 10px; }
 @media (max-width: 900px) { .brand-box__row { grid-template-columns: 1fr; } }
+
+/* ---- 화분키우기 (admin/dotpot.js) ---- */
+.dp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.dp-card { padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.dp-card small { color: var(--ink-3); font-size: 12px; }
+.dp-card b { font-size: 22px; }
+.dp-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.dp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.dp-tools .cinput { max-width: 280px; }
+.dp-num { width: 76px; }
+.dp-scroll { overflow-x: auto; }
+.dp-banned td { color: #fca5a5; }
+.dp-alert { color: #fca5a5; font-weight: 600; margin: 8px 0; }
+.dp-h { font-size: 18px; margin: 14px 0 4px; word-break: break-all; }
+.dp-raw h3, .dp-form h3, .dp-body > h3 { font-size: 15px; margin: 18px 0 6px; }
+.dp-form { display: flex; flex-direction: column; gap: 10px; max-width: 920px; padding: 16px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); }
+.dp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dp-row .cinput { flex: 1 1 200px; }
+.dp-pick { max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; margin: 4px 0 12px; }
+.dp-pick .table td.mono { font-size: 12px; white-space: nowrap; }
+.dp-pick .table th, .dp-pick .table td { white-space: nowrap; }
+.dp-form .dp-row .cinput.dp-num { flex: 0 0 90px; }
+.dp-rate-name { min-width: 230px; }
