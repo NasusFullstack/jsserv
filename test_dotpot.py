@@ -253,6 +253,46 @@ check("관리 화면 확률에 신비한 꽃", "mystic" in client.get("/dotpot/a
 check("관리 화면 확률에 만렙 능력·열매", all(k in client.get("/dotpot/api/admin/rates", headers=KEY).json()["rates"] for k in ("abil_two", "fruit_good", "fruit_dept", "fruit_luck")))
 check("열매 등급 합이 100% 넘으면 거절", client.post("/dotpot/api/admin/rates", json={"rates": {"fruit_rot": 0.5, "fruit_meh": 0.3, "fruit_good": 0.2, "fruit_dept": 0.1}}, headers=KEY).status_code == 400)
 
+# ---------- 의문의 상인 두 단계 (1.5.1~: 맡길 때 신비한 꽃 이벤트를 먼저 알려 줌) ----------
+def fuse_seeds(hd, n=3):
+    out = []
+    for _ in range(n):
+        rr = client.post("/dotpot/api/draw", json={"req": req()}, headers=hd).json()
+        s = rr.get("seed") or {}
+        if s.get("kind") in ("flower", "tree") and not s.get("rare"):
+            out.append(s["sid"])
+    return out
+
+
+client.post("/dotpot/api/admin/events", json={"bundles": 30, "msg": "상인 시험", "targets": [M["id"]]}, headers=KEY)
+client.post("/dotpot/api/mail/claim", json={"event": "all"}, headers=HM)
+ss = []
+while len(ss) < 3:
+    ss += fuse_seeds(HM, 3 - len(ss))
+ss = ss[:3]
+fq = req()
+st1 = client.post("/dotpot/api/fuse/start", json={"req": fq, "sids": ss}, headers=HM).json()
+st1b = client.post("/dotpot/api/fuse/start", json={"req": fq, "sids": ss}, headers=HM).json()
+check("상인 1단계: 씨앗 3개 받고 이벤트 여부 (같은 요청은 같은 결과)", "mystic" in st1 and st1["mystic"] == st1b["mystic"], str(st1))
+check("상인 1단계: 쓴 씨앗은 다시 못 맡김", client.post("/dotpot/api/fuse/start", json={"req": req(), "sids": ss}, headers=HM).status_code == 409)
+pk = client.post("/dotpot/api/fuse/pick", json={"req": fq, "pick": "tree"}, headers=HM).json()
+pk2 = client.post("/dotpot/api/fuse/pick", json={"req": fq, "pick": "flower"}, headers=HM).json()
+check("상인 2단계: 고른 것 → 씨앗 하나 (같은 요청은 같은 씨앗)", pk.get("seed", {}).get("sid") and pk["seed"]["sid"] == pk2["seed"]["sid"], str(pk)[:200])
+check("상인 2단계: 맡긴 기록 없으면 404", client.post("/dotpot/api/fuse/pick", json={"req": req(), "pick": "tree"}, headers=HM).status_code == 404)
+client.post("/dotpot/api/admin/rates", json={"rates": {"fuse_mystic": 0.05}}, headers=KEY)
+DR.rules._rand = type("R", (), {"random": lambda self: 0.0, "choice": lambda self, xs: xs[-1], "randrange": lambda self, a, b: a})()   # 확률을 꼭 걸리게
+ss2 = []
+DR.rules._rand = __import__("secrets").SystemRandom()
+while len(ss2) < 3:
+    ss2 += fuse_seeds(HM, 3 - len(ss2))
+DR.rules._rand = type("R", (), {"random": lambda self: 0.0, "choice": lambda self, xs: xs[-1], "randrange": lambda self, a, b: a})()
+fq2 = req()
+ms1 = client.post("/dotpot/api/fuse/start", json={"req": fq2, "sids": ss2[:3]}, headers=HM).json()
+ms2 = client.post("/dotpot/api/fuse/pick", json={"req": fq2, "pick": "flower"}, headers=HM).json()
+DR.rules._rand = __import__("secrets").SystemRandom()
+client.post("/dotpot/api/admin/rates", json={"rates": {"fuse_mystic": 0.00001}}, headers=KEY)
+check("상인 신비한 꽃 이벤트 → 신비한 꽃 씨앗", ms1.get("mystic") is True and ms2.get("seed", {}).get("kind") == "mystic" and ms2["seed"]["ptype"] in DC.MYSTIC_TYPES, str(ms1) + str(ms2)[:200])
+
 # ---------- 배경 뽑기권 · 배경 뽑기 ----------
 rb0 = client.post("/dotpot/api/sync", json={"mail": 1}, headers=HM).json()
 check("처음 배경 뽑기권 0", rb0.get("bg_tickets") == 0, str(rb0)[:200])

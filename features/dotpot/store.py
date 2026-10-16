@@ -351,6 +351,30 @@ def fuse(iid, req, sids, make):
                   lambda r: r["kind"] in ("flower", "tree") and not r["rare"] and not r["rewarded"], make)
 
 
+def fuse_start(iid, req, sids, mystic):
+    """의문의 상인 1단계 (게임 1.5.1~): 씨앗 3개를 받고(씀) 신비한 꽃 이벤트인지 정해 둠 — 같은 요청 번호면 같은 결과"""
+    return _craft(iid, req, "fuse_start", "seeds", "sid", sids,
+                  lambda r: r["kind"] in ("flower", "tree") and not r["rare"] and not r["rewarded"],
+                  lambda: ({"mystic": bool(mystic)}, lambda con, now: None))
+
+
+def fuse_pick(iid, req, make):
+    """의문의 상인 2단계: 1단계(req)에 정해 둔 대로 씨앗 하나 — make(1단계 결과) → (씨앗, 행 기록 함수). 같은 req 면 같은 씨앗"""
+    now = time.time()
+    with Tx() as con:
+        st = con.execute("SELECT result FROM draws WHERE install=? AND req=? AND what='fuse_start'", (iid, req)).fetchone()
+        if not st:
+            return None, balance(con, iid), "unknown"
+        old = con.execute("SELECT result FROM draws WHERE install=? AND req=?", (iid, req + "_p")).fetchone()
+        if old:
+            return json.loads(old["result"]), balance(con, iid), None
+        result, save_row = make(json.loads(st["result"]))
+        save_row(con, now)
+        con.execute("INSERT INTO draws (install, req, at, what, result) VALUES (?,?,?,?,?)", (iid, req + "_p", now, "fuse", json.dumps(result)))
+        _ledger(con, iid, "fuse", 0, 0, "%s ← %s" % (result.get("sid"), req), now)
+        return result, balance(con, iid), None
+
+
 def _register_pots(con, iid, pots, now):
     """공방에 맡기는 화분 중 서버가 모르는 것을 등록 (기본 화분 · 예전 판 화분). 등록 못 하면 False"""
     inst = con.execute("SELECT * FROM installs WHERE id=?", (iid,)).fetchone()

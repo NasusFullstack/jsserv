@@ -322,6 +322,54 @@ async def fuse(request: Request):
     return _ok({"seed": result, "rates": rates, **bal, **prog})
 
 
+@router.post("/fuse/start")
+async def fuse_start(request: Request):
+    """의문의 상인 1단계 (게임 1.5.1~): 일반 씨앗·묘목 3개를 맡김 → 신비한 꽃 이벤트인지(fuse_mystic) — 게임이 다섯 개를 깔기 전에 알아야 해서"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    req = str(d.get("req", ""))
+    sids = _ids(d, "sids", SID_RE)
+    if not REQ_RE.match(req) or sids is None:
+        return _err("요청이 이상합니다")
+    rates = await run_in_threadpool(store.get_rates)
+    mystic = rules.roll_chance(rates.get("fuse_mystic", 0.0))
+    result, bal, err = await run_in_threadpool(store.fuse_start, inst["id"], req, sids, mystic)
+    if err:
+        await run_in_threadpool(store.reject, inst["id"], "fuse_" + err, ",".join(sids))
+        return _err("맡길 수 없는 씨앗이 있어요 (이미 쓴 씨앗·신비한·고급 씨앗은 안 돼요)", 409, **bal)
+    return _ok({"mystic": bool(result.get("mystic")), **bal})
+
+
+@router.post("/fuse/pick")
+async def fuse_pick(request: Request):
+    """의문의 상인 2단계: 고른 것(씨앗 flower · 묘목 tree) — 1단계가 신비한 꽃이면 신비한 꽃 씨앗"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    req = str(d.get("req", ""))
+    pick = str(d.get("pick", ""))
+    if not REQ_RE.match(req) or pick not in ("flower", "tree"):
+        return _err("요청이 이상합니다")
+    rates = await run_in_threadpool(store.get_rates)
+
+    def make(start):
+        seed = rules.roll_mystic() if start.get("mystic") else rules.roll_fuse(rates, pick)
+
+        def save_row(con, now):
+            con.execute("INSERT INTO seeds (sid, install, kind, ptype, rare, n, drawn, src) VALUES (?,?,?,?,0,?,?,'fuse')",
+                        (seed["sid"], inst["id"], seed["kind"], seed["ptype"], seed["n"], now))
+        return seed, save_row
+
+    result, bal, err = await run_in_threadpool(store.fuse_pick, inst["id"], req, make)
+    if err:
+        return _err("맡긴 기록이 없어요", 404, **bal)
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"seed": result, "rates": rates, **bal, **prog})
+
+
 @router.post("/kiln")
 async def kiln(request: Request):
     """공방: 화분 3개 → 다시 구운 화분 하나 (크기는 아무거나, 정해진 확률로 고급)"""

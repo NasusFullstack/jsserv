@@ -44,6 +44,15 @@ def roll_seed(rates, month=None, mystic=False):
     return out
 
 
+def roll_chance(p):
+    return _rand.random() < float(p)
+
+
+def roll_mystic():
+    """신비한 꽃 1~4 · 생명의 꽃 중 하나 (꾸러미·상인 공통)"""
+    return {"sid": "s" + secrets.token_hex(8), "kind": "mystic", "ptype": _rand.choice(C.MYSTIC_TYPES), "rare": False, "n": _rand.randrange(1, 2 ** 31)}
+
+
 def roll_pot(size, rates):
     return {"pid": "p" + secrets.token_hex(8), "size": size, "lux": _rand.random() < rates["lux"], "n": _rand.randrange(1, 2 ** 31)}
 

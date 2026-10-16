@@ -27,14 +27,15 @@ BALANCE_MAX = 999
 
 # ---- 뽑기 확률: 기본값 (관리 화면 「확률」에서 바꾸면 DB 값이 우선 — 게임은 켤 때·뽑을 때 받아 보여 줌) ----
 # kiln_small·big·huge = 공방에서 나오는 화분 크기 비율 (셋의 합으로 나눠 씀, 기본은 고루)
-RATE_DEFAULTS = {"mystic": 0.0005, "premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05,
+RATE_DEFAULTS = {"mystic": 0.0005, "fuse_mystic": 0.00001, "premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05,
                  "kiln_small": 0.3333, "kiln_big": 0.3333, "kiln_huge": 0.3333,
                  "abil_two": 0.02, "fruit_rot": 0.08, "fruit_meh": 0.22, "fruit_good": 0.12, "fruit_dept": 0.01, "fruit_luck": 0.01}
 # 만렙 능력·열매 값은 서버가 쓰지 않고 게임에 보내 줌 (게임이 켤 때·뽑을 때 받아 씀)
-RATE_LIMITS = {"mystic": (0.0, 0.05), "premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0),
+RATE_LIMITS = {"mystic": (0.0, 0.05), "fuse_mystic": (0.0, 0.05), "premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0),
                "kiln_small": (0.0, 1.0), "kiln_big": (0.0, 1.0), "kiln_huge": (0.0, 1.0),
                "abil_two": (0.0, 1.0), "fruit_rot": (0.0, 1.0), "fruit_meh": (0.0, 1.0), "fruit_good": (0.0, 1.0), "fruit_dept": (0.0, 1.0), "fruit_luck": (0.0, 0.1)}
-RATE_NAMES = {"mystic": "신비한 꽃 1~4 · 생명의 꽃 (씨앗 꾸러미, 5종 합 — 한 종류는 1/5)", "premium": "고급 나무 (씨앗 꾸러미)", "tree": "묘목 · 나무 (고급이 아닐 때)",
+RATE_NAMES = {"mystic": "신비한 꽃 1~4 · 생명의 꽃 (씨앗 꾸러미, 5종 합 — 한 종류는 1/5)",
+              "fuse_mystic": "신비한 꽃 (의문의 상인 — 맡길 때 신비한 꽃 씨앗 다섯 개를 보여 줌, 게임엔 안 보임)", "premium": "고급 나무 (씨앗 꾸러미)", "tree": "묘목 · 나무 (고급이 아닐 때)",
               "rare": "신비한 씨앗·묘목 (고급이 아닐 때)", "lux": "고급 화분 (화분 뽑기)",
               "fuse": "고급 묘목 (의문의 상인 — 씨앗 3개)", "kiln": "고급 화분 (공방 — 화분 3개)",
               "kiln_small": "공방 크기 비율 — 작은 화분", "kiln_big": "공방 크기 비율 — 큰 화분", "kiln_huge": "공방 크기 비율 — 아주 큰 화분",
@@ -45,7 +46,7 @@ FRUIT_GRADE_KEYS = ("fruit_rot", "fruit_meh", "fruit_good", "fruit_dept")   # �
 KILN_SIZE_KEYS = ("kiln_small", "kiln_big", "kiln_huge")   # POT_SIZES 순서
 # 관리 화면 「확률」 묶음
 RATE_GROUPS = [["뽑기 (씨앗 꾸러미 · 화분 뽑기)", ["mystic", "premium", "tree", "rare", "lux"]],
-               ["재조합 (의문의 상인 · 공방)", ["fuse", "kiln", "kiln_small", "kiln_big", "kiln_huge"]],
+               ["재조합 (의문의 상인 · 공방)", ["fuse", "fuse_mystic", "kiln", "kiln_small", "kiln_big", "kiln_huge"]],
                ["만렙 능력 · 열매 (게임이 켤 때·뽑을 때 받아 씀)", ["abil_two", "fruit_rot", "fruit_meh", "fruit_good", "fruit_dept", "fruit_luck"]]]
 
 # ---- 의문의 상인(씨앗 3개 → 고른 씨앗 하나) · 공방(화분 3개 → 다시 구운 화분 하나) ----
