@@ -49,6 +49,15 @@ ACH_SEEDS = 30             # 씨앗 매니아: 꾸러미 30번 열기
 ACHIEVEMENTS = {"pots30": (0, 5), "seeds30": (0, 5)}
 for _n in range(2, 13):    # 처음으로 2~12단계: 짝수 단계 = 화분 뽑기권, 홀수 = 꾸러미
     ACHIEVEMENTS["stage%d" % _n] = (0, 1) if _n % 2 == 0 else (1, 0)
+# 수집 목표 (게임이 종류를 확인, 서버는 다 키운 식물 수로만 확인): 이름 → 다 키운 식물이 이만큼은 있어야
+COLLECT_NEED = {"col_spring": 3, "col_field": 3, "col_quiet": 2, "col_autumn": 2, "col_evergreen": 2,
+                "col_flowers": 8, "col_trees": 5, "col_pastel": 1}
+ACHIEVEMENTS.update({"col_spring": (1, 0), "col_field": (1, 0), "col_quiet": (1, 0), "col_autumn": (0, 1), "col_evergreen": (0, 1),
+                     "col_flowers": (2, 2), "col_trees": (2, 2), "col_pastel": (1, 0), "col_premium": (0, 2)})   # col_premium = 고급 나무 다 키움 (서버가 셈)
+
+# ---- 일일 퀘스트 (서버 날짜 KST 하루에 한 번씩): 이름 → (꾸러미, 화분 뽑기권) ----
+DAILY = {"care1": (1, 0), "care3": (1, 0), "draw1": (0, 2)}
+DAILY_CARE = {"care1": 1, "care3": 3}   # 오늘 물·영양제를 각각 이만큼 (게임이 센 값)
 STAGE_HOURS = 0.6          # 처음 키우는 유저(옮겨 온 게 아님)는 등록 뒤 (단계-1)×이만큼 시간이 지나야 단계 도전과제 인정
 POT_SIZES = ("small", "big", "huge")
 PREMIUM_TREES = {"pine": "", "rubber": "", "cherry": "spring", "ginkgo": "autumn", "maple": "autumn", "xmas": "winter"}

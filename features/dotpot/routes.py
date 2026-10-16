@@ -322,6 +322,26 @@ async def achieve(request: Request):
     return _ok({"result": res, "key": key, **bal, **prog})
 
 
+@router.post("/daily")
+async def daily(request: Request):
+    """일일 퀘스트 보상 받기 — 서버 날짜로 하루에 한 번 (water·food = 오늘 물·영양제 준 횟수, 게임이 셈)"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    key = str(d.get("key", ""))[:20]
+    try:
+        water = max(0, min(999, int(d.get("water", 0))))
+        food = max(0, min(999, int(d.get("food", 0))))
+    except (TypeError, ValueError):
+        water = food = 0
+    bal, res = await run_in_threadpool(store.daily, inst["id"], key, water, food)
+    if res == "not_yet":
+        await run_in_threadpool(store.reject, inst["id"], "daily_not_yet", "%s w=%d f=%d" % (key, water, food))
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"result": res, "key": key, **bal, **prog})
+
+
 @router.post("/reward")
 async def reward(request: Request):
     inst, bad = await _auth(request)
@@ -449,7 +469,7 @@ def admin_install(iid: str, request: Request):
     return _ok({
         "install": inst, "ban": store.ban_of(iid, inst["device"]),
         "ledger": q("ledger"), "draws": q("draws"), "seeds": q("seeds"), "pots": q("pots"), "grants": q("grants"), "rejects": q("rejects"),
-        "achievements": q("achievements"),
+        "achievements": q("achievements"), "daily": q("daily"),
         "same_device": store.rows("SELECT id, last_seen FROM installs WHERE device=? AND device<>'' AND id<>?", (inst["device"], iid)),
     })
 

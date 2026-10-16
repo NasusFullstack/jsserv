@@ -4,6 +4,7 @@
 잔액이 바뀌는 일은 모두 ledger 에 한 줄씩 남긴다 → 관리 화면에서 그대로(로우 데이터) 볼 수 있다.
 쓰기는 BEGIN IMMEDIATE 로 하나씩 (동시에 와도 꾸러미가 두 번 깎이거나 늘지 않게).
 """
+import datetime
 import json
 import os
 import sqlite3
@@ -38,6 +39,8 @@ CREATE TABLE IF NOT EXISTS pots (
     used INTEGER NOT NULL DEFAULT 0, legacy INTEGER NOT NULL DEFAULT 0, src TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (install, pid));
 CREATE TABLE IF NOT EXISTS achievements (install TEXT NOT NULL, key TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY (install, key));
+CREATE TABLE IF NOT EXISTS daily (install TEXT NOT NULL, day TEXT NOT NULL, key TEXT NOT NULL, at REAL NOT NULL, water INTEGER NOT NULL DEFAULT 0,
+    food INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (install, day, key));
 CREATE INDEX IF NOT EXISTS pots_install ON pots(install);
 CREATE TABLE IF NOT EXISTS draws (
     install TEXT NOT NULL, req TEXT NOT NULL, at REAL NOT NULL, what TEXT NOT NULL, result TEXT NOT NULL,
@@ -256,12 +259,25 @@ def reward(iid, sid, outcome, min_hours):
 
 # ---- 의문의 상인 · 공방 · 도전과제 ----
 
+def today():
+    """서버 날짜 (KST) — 일일 퀘스트는 이 날짜로 하루에 한 번"""
+    return datetime.datetime.now(C.KST).strftime("%Y-%m-%d")
+
+
+def _day_start(day):
+    return datetime.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=C.KST).timestamp()
+
+
 def progress(con, iid):
-    """도전과제 진행 (서버 기준): 모은 화분 수 · 연 꾸러미 수 · 받은 도전과제"""
+    """도전과제 진행 (서버 기준): 모은 화분 수 · 연 꾸러미 수 · 다 키운 식물 수 · 받은 도전과제 · 오늘 받은 일일 퀘스트"""
     pots = con.execute("SELECT COUNT(*) n FROM pots WHERE install=?", (iid,)).fetchone()["n"]
     seeds = con.execute("SELECT COUNT(*) n FROM draws WHERE install=? AND what='seed'", (iid,)).fetchone()["n"]
+    grown = con.execute("SELECT COUNT(*) n FROM seeds WHERE install=? AND rewarded='grown'", (iid,)).fetchone()["n"]
     ach = [r["key"] for r in con.execute("SELECT key FROM achievements WHERE install=? ORDER BY at", (iid,))]
-    return {"stats": {"pots": pots, "seeds": seeds}, "ach": ach}
+    day = today()
+    daily = [r["key"] for r in con.execute("SELECT key FROM daily WHERE install=? AND day=? ORDER BY at", (iid, day))]
+    drew = con.execute("SELECT 1 FROM draws WHERE install=? AND what='seed' AND at>=? LIMIT 1", (iid, _day_start(day))).fetchone() is not None
+    return {"stats": {"pots": pots, "seeds": seeds, "grown": grown}, "ach": ach, "day": day, "daily": daily, "drew_today": drew}
 
 
 def _craft(iid, req, what, table, col, ids, check, make):
@@ -348,6 +364,11 @@ def achieve(iid, key):
             ok = pr["pots"] >= C.ACH_POTS
         elif key == "seeds30":
             ok = pr["seeds"] >= C.ACH_SEEDS
+        elif key == "col_premium":
+            ok = con.execute("SELECT 1 FROM seeds WHERE install=? AND kind='premium' AND rewarded='grown' LIMIT 1", (iid,)).fetchone() is not None
+        elif key in C.COLLECT_NEED:
+            moved = inst["migrated_bundles"] or inst["migrated_tickets"]
+            ok = bool(moved) or pr["grown"] >= C.COLLECT_NEED[key]
         elif key.startswith("stage"):
             st = int(key[5:])
             moved = inst["migrated_bundles"] or inst["migrated_tickets"] or con.execute(
@@ -360,6 +381,30 @@ def achieve(iid, key):
         con.execute("UPDATE installs SET bundles=MIN(?, bundles+?), tickets=MIN(?, tickets+?) WHERE id=?",
                     (C.BALANCE_MAX, db, C.BALANCE_MAX, dt, iid))
         _ledger(con, iid, "ach_" + key, db, dt, key, now)
+        return balance(con, iid), "ok"
+
+
+def daily(iid, key, water, food):
+    """일일 퀘스트 보상: 서버 날짜로 하루에 한 번. 꾸러미 열기는 서버가 확인, 물·영양 횟수는 게임이 센 값. 돌려줌 (잔액, 결과)"""
+    now = time.time()
+    day = today()
+    with Tx() as con:
+        if key not in C.DAILY:
+            return balance(con, iid), "unknown"
+        if con.execute("SELECT 1 FROM daily WHERE install=? AND day=? AND key=?", (iid, day, key)).fetchone():
+            return balance(con, iid), "dup"
+        if key == "draw1":
+            ok = con.execute("SELECT 1 FROM draws WHERE install=? AND what='seed' AND at>=? LIMIT 1", (iid, _day_start(day))).fetchone() is not None
+        else:
+            need = C.DAILY_CARE[key]
+            ok = water >= need and food >= need
+        if not ok:
+            return balance(con, iid), "not_yet"
+        db, dt = C.DAILY[key]
+        con.execute("INSERT INTO daily (install, day, key, at, water, food) VALUES (?,?,?,?,?,?)", (iid, day, key, now, water, food))
+        con.execute("UPDATE installs SET bundles=MIN(?, bundles+?), tickets=MIN(?, tickets+?) WHERE id=?",
+                    (C.BALANCE_MAX, db, C.BALANCE_MAX, dt, iid))
+        _ledger(con, iid, "daily_" + key, db, dt, day, now)
         return balance(con, iid), "ok"
 
 
@@ -407,7 +452,7 @@ def rows(sql, args=()):
         con.close()
 
 
-TABLES = ("installs", "seeds", "pots", "draws", "events", "event_targets", "grants", "ledger", "rejects", "bans", "rate_log", "achievements")
+TABLES = ("installs", "seeds", "pots", "draws", "events", "event_targets", "grants", "ledger", "rejects", "bans", "rate_log", "achievements", "daily")
 
 
 # ---- 뽑기 확률 (기본값 + 관리 화면에서 바꾼 값) ----
