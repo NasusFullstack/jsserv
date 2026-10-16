@@ -377,7 +377,7 @@ def admin_rates(request: Request):
     if bad:
         return bad
     return _ok({"rates": store.get_rates(), "defaults": C.RATE_DEFAULTS, "names": C.RATE_NAMES,
-                "limits": {k: list(v) for k, v in C.RATE_LIMITS.items()},
+                "limits": {k: list(v) for k, v in C.RATE_LIMITS.items()}, "groups": C.RATE_GROUPS,
                 "log": store.rows("SELECT * FROM rate_log ORDER BY id DESC LIMIT 50")})
 
 

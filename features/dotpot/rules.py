@@ -57,8 +57,10 @@ def roll_fuse(rates, pick, month=None):
 
 
 def roll_kiln(rates):
-    """공방: 크기는 셋 중 아무거나, 고급은 정해진 확률(rates['kiln'])"""
-    return {"pid": "p" + secrets.token_hex(8), "size": _rand.choice(C.POT_SIZES), "lux": _rand.random() < rates["kiln"],
+    """공방: 크기는 관리 화면의 크기 비율대로(없거나 모두 0 이면 고루), 고급은 정해진 확률(rates['kiln'])"""
+    w = [max(0.0, float(rates.get(k, 1.0))) for k in C.KILN_SIZE_KEYS]
+    size = _rand.choices(C.POT_SIZES, weights=w)[0] if sum(w) > 0 else _rand.choice(C.POT_SIZES)
+    return {"pid": "p" + secrets.token_hex(8), "size": size, "lux": _rand.random() < rates["kiln"],
             "n": _rand.randrange(1, 2 ** 31)}
 
 
@@ -72,6 +74,8 @@ def clean_rates(d):
         if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or not lo <= float(v) <= hi:
             raise ValueError("%s 확률은 %g%% ~ %g%% 사이여야 합니다" % (C.RATE_NAMES[k], lo * 100, hi * 100))
         out[k] = round(float(v), 4)
+    if all(k in out for k in C.KILN_SIZE_KEYS) and sum(out[k] for k in C.KILN_SIZE_KEYS) <= 0:
+        raise ValueError("공방 크기 비율이 모두 0% 면 안 됩니다")
     return out
 
 

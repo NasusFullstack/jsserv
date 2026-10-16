@@ -265,6 +265,15 @@ for i in range(N):
     sizes[p["size"]] += 1
     lux += 1 if p["lux"] else 0
 check("공방: 크기는 고루 · 고급 약 5%%", all(abs(v / N - 1 / 3) < 0.04 for v in sizes.values()) and abs(lux / N - 0.05) < 0.012, str(sizes) + " lux %d" % lux)
+sizes = {s: 0 for s in DC.POT_SIZES}
+for i in range(600):
+    sizes[rules.roll_kiln({"kiln": 0.05, "kiln_small": 0.0, "kiln_big": 0.25, "kiln_huge": 0.75})["size"]] += 1
+check("공방: 크기 비율대로 (작은 0 · 큰 25 · 아주 큰 75)", sizes["small"] == 0 and abs(sizes["huge"] / 600 - 0.75) < 0.07, str(sizes))
+check("공방: 크기 비율이 모두 0 이면 고루", {rules.roll_kiln({"kiln": 0, "kiln_small": 0, "kiln_big": 0, "kiln_huge": 0})["size"] for _ in range(200)} == set(DC.POT_SIZES))
+r = client.post("/dotpot/api/admin/rates", json={"rates": {"kiln_small": 0, "kiln_big": 0, "kiln_huge": 0}}, headers=KEY)
+check("확률: 공방 크기 비율 모두 0 은 거절", r.status_code == 400, r.text[:200])
+r = client.get("/dotpot/api/admin/rates", headers=KEY).json()
+check("확률: 관리 화면 묶음 — 재조합(상인·공방)", any(g[0].startswith("재조합") and "fuse" in g[1] and "kiln_big" in g[1] for g in r.get("groups", [])), str(r.get("groups"))[:200])
 r = client.post("/dotpot/api/achieve", json={"key": "pots30"}, headers=H(CR, "d" * 64))
 check("도전과제: 화분 30개 전엔 안 됨", r.json().get("result") == "not_yet", r.text[:200])
 con = db()

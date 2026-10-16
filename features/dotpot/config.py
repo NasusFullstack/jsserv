@@ -25,11 +25,19 @@ MIGRATE_MAX_LEGACY = 60    # 예전 판에서 키우던 식물·씨앗 (보상 �
 BALANCE_MAX = 999
 
 # ---- 뽑기 확률: 기본값 (관리 화면 「확률」에서 바꾸면 DB 값이 우선 — 게임은 켤 때·뽑을 때 받아 보여 줌) ----
-RATE_DEFAULTS = {"premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05}
-RATE_LIMITS = {"premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0)}
+# kiln_small·big·huge = 공방에서 나오는 화분 크기 비율 (셋의 합으로 나눠 씀, 기본은 고루)
+RATE_DEFAULTS = {"premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05,
+                 "kiln_small": 0.3333, "kiln_big": 0.3333, "kiln_huge": 0.3333}
+RATE_LIMITS = {"premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0),
+               "kiln_small": (0.0, 1.0), "kiln_big": (0.0, 1.0), "kiln_huge": (0.0, 1.0)}
 RATE_NAMES = {"premium": "고급 나무 (씨앗 꾸러미)", "tree": "묘목 · 나무 (고급이 아닐 때)",
               "rare": "신비한 씨앗·묘목 (고급이 아닐 때)", "lux": "고급 화분 (화분 뽑기)",
-              "fuse": "고급 묘목 (의문의 상인 — 씨앗 3개)", "kiln": "고급 화분 (공방 — 화분 3개)"}
+              "fuse": "고급 묘목 (의문의 상인 — 씨앗 3개)", "kiln": "고급 화분 (공방 — 화분 3개)",
+              "kiln_small": "공방 크기 비율 — 작은 화분", "kiln_big": "공방 크기 비율 — 큰 화분", "kiln_huge": "공방 크기 비율 — 아주 큰 화분"}
+KILN_SIZE_KEYS = ("kiln_small", "kiln_big", "kiln_huge")   # POT_SIZES 순서
+# 관리 화면 「확률」 묶음
+RATE_GROUPS = [["뽑기 (씨앗 꾸러미 · 화분 뽑기)", ["premium", "tree", "rare", "lux"]],
+               ["재조합 (의문의 상인 · 공방)", ["fuse", "kiln", "kiln_small", "kiln_big", "kiln_huge"]]]
 
 # ---- 의문의 상인(씨앗 3개 → 고른 씨앗 하나) · 공방(화분 3개 → 다시 구운 화분 하나) ----
 CRAFT_COUNT = 3

@@ -227,14 +227,23 @@ async function drawRates(body, view) {
   const inputs = {};
   const out = h('div');
   const val = (k) => Math.max(0, +inputs[k].value || 0) / 100;
+  const out2 = h('div');
+  const sizeKeys = ['kiln_small', 'kiln_big', 'kiln_huge'];
   function preview() {
     const p = val('premium'), t = val('tree'), r = val('rare');
     const card = (k, v) => h('div.dp-card', h('small', k), h('b.mono', `${pct(v)}%`));
     out.replaceChildren(
       h('p.view__sub', '꾸러미 하나를 열면 실제로 이렇게 나와요 (시즌 고급 나무는 그 달에만 종류에 끼어요)'),
       h('div.dp-cards', card('고급 나무', p), card('묘목 (나무)', (1 - p) * t), card('꽃 씨앗', (1 - p) * (1 - t)), card('그중 신비한', (1 - p) * r), card('고급 화분 (화분 뽑기)', val('lux'))));
+    if (!inputs.kiln_small) return;
+    const sw = sizeKeys.map(val), sum = sw.reduce((a, b) => a + b, 0);
+    const share = (i) => (sum > 0 ? sw[i] / sum : 1 / 3);
+    out2.replaceChildren(
+      h('p.view__sub', sum > 0 ? '맡기면 실제로 이렇게 나와요 (크기 비율은 셋의 합으로 나눠 씀)' : '⚠ 크기 비율이 모두 0% — 저장할 수 없어요'),
+      h('div.dp-cards', card('상인: 고급 묘목', val('fuse')), card('공방: 고급 화분', val('kiln')),
+        card('공방: 작은 화분', share(0)), card('공방: 큰 화분', share(1)), card('공방: 아주 큰 화분', share(2))));
   }
-  const rows = Object.keys(res.names).map((k) => {
+  const row = (k) => {
     const [lo, hi] = res.limits[k];
     const inp = h('input.cinput.dp-num', { type: 'number', step: 0.1, min: lo * 100, max: hi * 100, value: pct(res.rates[k]), oninput: preview });
     inputs[k] = inp;
@@ -244,7 +253,9 @@ async function drawRates(body, view) {
       h('span.view__sub', `기본 ${pct(res.defaults[k])}% · ${lo * 100}~${hi * 100}%`),
       changed ? h('span.badge', '바꿈') : '',
       h('button.btn.btn--ghost.btn--sm', { onclick: () => { inp.value = pct(res.defaults[k]); preview(); } }, '기본값으로'));
-  });
+  };
+  const groups = res.groups || [['뽑기 확률', Object.keys(res.names)]];
+  const sections = groups.map(([title, keys], gi) => [h('h3', title), ...keys.filter((k) => res.names[k]).map(row), gi === 0 ? out : out2]).flat();
   const note = h('input.cinput', { placeholder: '바꾼 이유 (예: 주말 고급 나무 이벤트)', maxlength: 200 });
   const save = async () => {
     const rates = {};
@@ -261,10 +272,8 @@ async function drawRates(body, view) {
   const name = (k) => res.names[k] || k;
   body.replaceChildren(
     h('div.dp-form',
-      h('h3', '뽑기 확률'),
-      ...rows,
+      ...sections,
       h('label.dp-row', h('span', '메모'), note),
-      out,
       h('button.btn.btn--primary', { onclick: save }, '확률 저장')),
     h('h3', '바뀐 기록'),
     res.log.length ? h('div.dp-scroll', h('table.table', h('thead', h('tr', ['바꾼 때', '확률', '전', '후', '메모'].map((c) => h('th', c)))),
