@@ -242,6 +242,24 @@ client.post("/dotpot/api/admin/events/%d/cancel" % e5, headers=KEY)
 rx = client.post("/dotpot/api/mail/claim", json={"event": e5}, headers=HM).json()
 check("취소된 우편은 못 받음 (gone)", rx["result"] == "gone" and rx["gifts"] == [] and not any(m["event"] == e5 for m in rx["mail"]), str(rx)[:200])
 check("우편 번호가 이상하면 400", client.post("/dotpot/api/mail/claim", json={"event": "x"}, headers=HM).status_code == 400)
+# ---------- 배경 뽑기권 · 배경 뽑기 ----------
+rb0 = client.post("/dotpot/api/sync", json={"mail": 1}, headers=HM).json()
+check("처음 배경 뽑기권 0", rb0.get("bg_tickets") == 0, str(rb0)[:200])
+r = client.post("/dotpot/api/bgdraw", json={"req": req()}, headers=HM)
+check("배경 뽑기권 없으면 409", r.status_code == 409 and r.json().get("bg_tickets") == 0, r.text[:200])
+eg = client.post("/dotpot/api/admin/events", json={"bg": 2, "msg": "배경 선물"}, headers=KEY).json()["id"]
+mg = [m for m in client.post("/dotpot/api/mail", json={}, headers=HM).json()["mail"] if m["event"] == eg]
+check("우편에 배경 뽑기권", len(mg) == 1 and mg[0]["bg"] == 2 and not mg[0]["got"], str(mg)[:200])
+rg = client.post("/dotpot/api/mail/claim", json={"event": eg}, headers=HM).json()
+check("우편 받기 → 배경 뽑기권 +2", rg["bg_tickets"] == 2 and rg["gifts"][0]["bg"] == 2, str(rg)[:200])
+q1 = req()
+d1 = client.post("/dotpot/api/bgdraw", json={"req": q1}, headers=HM).json()
+d1b = client.post("/dotpot/api/bgdraw", json={"req": q1}, headers=HM).json()
+check("배경 뽑기 → 배경 하나 · 뽑기권 -1 · 같은 요청은 같은 결과", d1.get("bg") in DC.BG_KEYS and d1["bg_tickets"] == 1 and d1b["bg"] == d1["bg"] and d1b["bg_tickets"] == 1, str(d1) + str(d1b))
+d2 = client.post("/dotpot/api/bgdraw", json={"req": req()}, headers=HM).json()
+check("두 번째 뽑기 → 뽑기권 0", d2.get("bg") in DC.BG_KEYS and d2["bg_tickets"] == 0, str(d2))
+check("장부에 배경 뽑기권", client.get("/dotpot/api/admin/installs/" + M["id"], headers=KEY).status_code == 200)
+check("이벤트 개수 0~99 (배경 뽑기권 100 → 거절)", client.post("/dotpot/api/admin/events", json={"bg": 100}, headers=KEY).status_code == 400)
 check("남의 우편: 고른 사람에게만 간 이벤트는 못 받음",
       client.post("/dotpot/api/mail/claim", json={"event": client.post("/dotpot/api/admin/events", json={"bundles": 1, "msg": "B 전용", "targets": [B["id"]]}, headers=KEY).json()["id"]}, headers=HM).json()["result"] == "gone")
 

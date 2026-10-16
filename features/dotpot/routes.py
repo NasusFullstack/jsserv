@@ -238,6 +238,24 @@ async def draw(request: Request):
     return _ok({"seed": result, "rewarded": rewarded, "rates": rates, **bal, **prog})
 
 
+@router.post("/bgdraw")
+async def bgdraw(request: Request):
+    """배경 뽑기: 배경 뽑기권 한 장 → 배경 하나 (같은 배경도 또 나옴). 가진 배경은 게임이 보관함 「기타」에 둠"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    req = str(d.get("req", ""))
+    if not REQ_RE.match(req):
+        return _err("요청이 이상합니다")
+    res = {"bg": secrets.choice(C.BG_KEYS)}
+    result, bal, err = await run_in_threadpool(store.draw, inst["id"], req, "bg", "bg_tickets", lambda: (res, lambda con, now: None))
+    if err:
+        await run_in_threadpool(store.reject, inst["id"], "no_bg_ticket", "req=" + req)
+        return _err("배경 뽑기권이 없어요", 409, **bal)
+    return _ok({**result, **bal})
+
+
 @router.post("/potdraw")
 async def potdraw(request: Request):
     inst, bad = await _auth(request)
@@ -561,11 +579,11 @@ async def admin_add_event(request: Request):
         return bad
     d = await _body(request) or {}
     try:
-        b, t = int(d.get("bundles", 0)), int(d.get("tickets", 0))
+        b, t, bg = int(d.get("bundles", 0)), int(d.get("tickets", 0)), int(d.get("bg", 0))
     except (TypeError, ValueError):
         return _err("개수는 숫자여야 합니다")
-    if b < 0 or t < 0 or b + t == 0 or b > 99 or t > 99:
-        return _err("꾸러미·뽑기권 중 하나 이상, 0~99개")
+    if min(b, t, bg) < 0 or b + t + bg == 0 or max(b, t, bg) > 99:
+        return _err("꾸러미·화분 뽑기권·배경 뽑기권 중 하나 이상, 0~99개")
     msg = str(d.get("msg", "")).strip()[:60] or "선물이 도착했어요"
     now = time.time()
     start = _ts(d.get("start_at"), now)
@@ -583,7 +601,7 @@ async def admin_add_event(request: Request):
             return _err("이 번호는 못 찾았습니다 — " + " · ".join(bad[:20]))
         if not targets:
             return _err("받을 유저 아이디가 이상합니다")
-    eid = await run_in_threadpool(store.add_event, start, end, b, t, msg, bool(d.get("include_new", True)), targets)
+    eid = await run_in_threadpool(store.add_event, start, end, b, t, msg, bool(d.get("include_new", True)), targets, bg)
     return _ok({"ok": True, "id": eid})
 
 

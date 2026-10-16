@@ -86,6 +86,9 @@ def _migrate(con):
     cols = lambda t: {r["name"] for r in con.execute("PRAGMA table_info(%s)" % t)}
     if "legacy_pots" not in cols("installs"):
         con.execute("ALTER TABLE installs ADD COLUMN legacy_pots INTEGER NOT NULL DEFAULT 0")
+    for t, c in (("installs", "bg_tickets"), ("events", "bg_tickets"), ("ledger", "d_bg")):   # 배경 뽑기권 (1.5.0)
+        if c not in cols(t):
+            con.execute("ALTER TABLE %s ADD COLUMN %s INTEGER NOT NULL DEFAULT 0" % (t, c))
     for c, d in (("used", "INTEGER NOT NULL DEFAULT 0"), ("src", "TEXT NOT NULL DEFAULT ''")):
         if c not in cols("seeds"):
             con.execute("ALTER TABLE seeds ADD COLUMN %s %s" % (c, d))
@@ -119,9 +122,9 @@ class Tx:
         return False
 
 
-def _ledger(con, install, reason, db, dt, ref="", at=None):
-    con.execute("INSERT INTO ledger (install, at, reason, d_bundles, d_tickets, ref) VALUES (?,?,?,?,?,?)",
-                (install, at or time.time(), reason, db, dt, ref))
+def _ledger(con, install, reason, db, dt, ref="", at=None, dbg=0):
+    con.execute("INSERT INTO ledger (install, at, reason, d_bundles, d_tickets, ref, d_bg) VALUES (?,?,?,?,?,?,?)",
+                (install, at or time.time(), reason, db, dt, ref, dbg))
 
 
 def reject(install, reason, detail=""):
@@ -186,8 +189,8 @@ def unban(bid, note=""):
 
 
 def balance(con, iid):
-    r = con.execute("SELECT bundles, tickets FROM installs WHERE id=?", (iid,)).fetchone()
-    return {"bundles": r["bundles"], "tickets": r["tickets"]}
+    r = con.execute("SELECT bundles, tickets, bg_tickets FROM installs WHERE id=?", (iid,)).fetchone()
+    return {"bundles": r["bundles"], "tickets": r["tickets"], "bg_tickets": r["bg_tickets"]}
 
 
 # ---- 이벤트: 받을 차례인 이벤트 (예전 게임은 켤 때 바로 지급, 1.5.0~ 은 우편함에서 「받기」) ----
@@ -210,10 +213,10 @@ def _due_events(con, iid, now):
 
 def _grant(con, iid, e, now):
     con.execute("INSERT INTO grants (install, event, at) VALUES (?,?,?)", (iid, e["id"], now))
-    con.execute("UPDATE installs SET bundles=MIN(?, bundles+?), tickets=MIN(?, tickets+?) WHERE id=?",
-                (C.BALANCE_MAX, e["bundles"], C.BALANCE_MAX, e["tickets"], iid))
-    _ledger(con, iid, "event", e["bundles"], e["tickets"], str(e["id"]), now)
-    return {"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"]}
+    con.execute("UPDATE installs SET bundles=MIN(?, bundles+?), tickets=MIN(?, tickets+?), bg_tickets=MIN(?, bg_tickets+?) WHERE id=?",
+                (C.BALANCE_MAX, e["bundles"], C.BALANCE_MAX, e["tickets"], C.BALANCE_MAX, e["bg_tickets"], iid))
+    _ledger(con, iid, "event", e["bundles"], e["tickets"], str(e["id"]), now, e["bg_tickets"])
+    return {"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"], "bg": e["bg_tickets"]}
 
 
 def apply_events(iid, now=None):
@@ -226,11 +229,11 @@ def apply_events(iid, now=None):
 
 def _mail_list(con, iid, now):
     """우편함: 받을 것(기간 안) + 최근 받은 것 (MAIL_KEEP_DAYS 안, 최대 MAIL_MAX)"""
-    out = [{"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"],
+    out = [{"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"], "bg": e["bg_tickets"],
             "start": e["start_at"], "end": e["end_at"], "got": False} for e in _due_events(con, iid, now)]
     got = con.execute("SELECT e.*, g.at got_at FROM grants g JOIN events e ON e.id=g.event WHERE g.install=? AND g.at>=? "
                       "ORDER BY g.at DESC LIMIT ?", (iid, now - C.MAIL_KEEP_DAYS * 86400, C.MAIL_MAX)).fetchall()
-    out += [{"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"],
+    out += [{"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"], "bg": e["bg_tickets"],
              "start": e["start_at"], "end": e["end_at"], "got": True, "got_at": e["got_at"]} for e in got]
     return out[:C.MAIL_MAX]
 
@@ -260,7 +263,7 @@ def claim_mail(iid, eid, now=None):
 # ---- 뽑기: 같은 요청 번호면 앞 결과 그대로 (네트워크 재시도에 두 번 깎이지 않게) ----
 
 def draw(iid, req, what, cost_col, make):
-    """cost_col = 'bundles' | 'tickets'. make() → (결과 dict, 기록할 행 함수). 돌려줌: (결과, 잔액, 오류)"""
+    """cost_col = 'bundles' | 'tickets' | 'bg_tickets'. make() → (결과 dict, 기록할 행 함수). 돌려줌: (결과, 잔액, 오류)"""
     now = time.time()
     with Tx() as con:
         old = con.execute("SELECT result FROM draws WHERE install=? AND req=?", (iid, req)).fetchone()
@@ -274,7 +277,7 @@ def draw(iid, req, what, cost_col, make):
         save_row(con, now)
         con.execute("INSERT INTO draws (install, req, at, what, result) VALUES (?,?,?,?,?)", (iid, req, now, what, json.dumps(result)))
         _ledger(con, iid, "draw_" + what, -1 if cost_col == "bundles" else 0, -1 if cost_col == "tickets" else 0,
-                result.get("sid") or result.get("pid") or "", now)
+                result.get("sid") or result.get("pid") or result.get("bg") or "", now, -1 if cost_col == "bg_tickets" else 0)
         return result, balance(con, iid), None
 
 
@@ -461,11 +464,11 @@ def progress_of(iid):
 
 # ---- 관리 ----
 
-def add_event(start_at, end_at, bundles, tickets, msg, include_new, targets=None):
-    """targets = None 이면 모두에게, 설치 번호 목록이면 그 설치본에게만"""
+def add_event(start_at, end_at, bundles, tickets, msg, include_new, targets=None, bg=0):
+    """targets = None 이면 모두에게, 설치 번호 목록이면 그 설치본에게만. bg = 배경 뽑기권"""
     with Tx() as con:
-        cur = con.execute("INSERT INTO events (created, start_at, end_at, bundles, tickets, msg, include_new, target_all) VALUES (?,?,?,?,?,?,?,?)",
-                          (time.time(), start_at, end_at, bundles, tickets, msg, 1 if include_new else 0, 0 if targets is not None else 1))
+        cur = con.execute("INSERT INTO events (created, start_at, end_at, bundles, tickets, msg, include_new, target_all, bg_tickets) VALUES (?,?,?,?,?,?,?,?,?)",
+                          (time.time(), start_at, end_at, bundles, tickets, msg, 1 if include_new else 0, 0 if targets is not None else 1, bg))
         eid = cur.lastrowid
         for t in targets or []:
             con.execute("INSERT OR IGNORE INTO event_targets (event, install) VALUES (?,?)", (eid, t))

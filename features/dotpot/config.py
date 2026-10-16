@@ -19,6 +19,7 @@ KST = datetime.timezone(datetime.timedelta(hours=9))
 # ---- 처음 등록 ----
 START_BUNDLES = 5          # 새로 시작하는 설치본
 START_TICKETS = 1
+START_BG = 0               # 배경 뽑기권 (이벤트 우편으로 받음)
 MIGRATE_MAX_BUNDLES = 20   # 예전 판에서 가져오는 꾸러미 상한 (저장 파일을 고쳐 부풀리는 것 막기)
 MIGRATE_MAX_TICKETS = 10
 MIGRATE_MAX_LEGACY = 60    # 예전 판에서 키우던 식물·씨앗 (보상 받을 자격) 상한
@@ -64,6 +65,7 @@ DAILY = {"care1": (1, 0), "care3": (1, 0), "draw1": (0, 2)}
 DAILY_CARE = {"care1": 1, "care3": 3}   # 오늘 물·영양제를 각각 이만큼 (게임이 센 값)
 STAGE_HOURS = 0.6          # 처음 키우는 유저(옮겨 온 게 아님)는 등록 뒤 (단계-1)×이만큼 시간이 지나야 단계 도전과제 인정
 POT_SIZES = ("small", "big", "huge")
+BG_KEYS = ("window", "night", "field", "forest", "beach", "snow")   # 배경 뽑기 (게임 Data.BACKGROUNDS 와 같음) — 모두 같은 확률, 같은 배경도 또 나옴
 PREMIUM_TREES = {"pine": "", "rubber": "", "cherry": "spring", "ginkgo": "autumn", "maple": "autumn", "xmas": "winter"}
 SEASON_MONTHS = {"spring": (3, 4, 5), "autumn": (9, 10, 11), "winter": (12,)}
 

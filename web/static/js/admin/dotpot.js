@@ -100,6 +100,8 @@ async function drawEvents(body, view) {
   const nB = h('input.cinput.dp-num', { type: 'number', min: 1, max: 99, value: 1 });
   const useT = h('input', { type: 'checkbox' });
   const nT = h('input.cinput.dp-num', { type: 'number', min: 1, max: 99, value: 1 });
+  const useG = h('input', { type: 'checkbox' });
+  const nG = h('input.cinput.dp-num', { type: 'number', min: 1, max: 99, value: 1 });
   const msg = h('input.cinput', { placeholder: '우편 내용 (예: 추석 선물이에요!)', maxlength: 60 });
   const toAll = h('input', { type: 'radio', name: 'dpto', checked: !picked.size });
   const toPicked = h('input', { type: 'radio', name: 'dpto', checked: !!picked.size });
@@ -110,13 +112,14 @@ async function drawEvents(body, view) {
   const send = async () => {
     const b = useB.checked ? +nB.value || 0 : 0;
     const t = useT.checked ? +nT.value || 0 : 0;
-    if (b + t <= 0) { toast('뿌릴 재화를 체크하고 개수를 넣어 주세요', true); return; }
+    const g = useG.checked ? +nG.value || 0 : 0;
+    if (b + t + g <= 0) { toast('뿌릴 재화를 체크하고 개수를 넣어 주세요', true); return; }
     const targets = toPicked.checked ? [...picked] : null;
     if (targets && !targets.length) { toast('아래 목록에서 받을 유저를 체크해 주세요', true); return; }
     const who = targets ? `고른 유저 ${targets.length}명(${targets.slice(0, 3).map(short).join(', ')}${targets.length > 3 ? ' …' : ''})` : '모두';
-    if (!confirm(`${who}에게 ${b ? `꾸러미 ${b}개 ` : ''}${t ? `뽑기권 ${t}장 ` : ''}을 ${when.value ? when.value.replace('T', ' ') + '에' : '지금'} 뿌릴까요?`)) return;
+    if (!confirm(`${who}에게 ${b ? `꾸러미 ${b}개 ` : ''}${t ? `화분 뽑기권 ${t}장 ` : ''}${g ? `배경 뽑기권 ${g}장 ` : ''}을 ${when.value ? when.value.replace('T', ' ') + '에' : '지금'} 뿌릴까요?`)) return;
     try {
-      await call('POST', `${API}/events`, { bundles: b, tickets: t, msg: msg.value, targets, start_at: when.value || '', include_new: incNew.checked });
+      await call('POST', `${API}/events`, { bundles: b, tickets: t, bg: g, msg: msg.value, targets, start_at: when.value || '', include_new: incNew.checked });
       toast('뿌렸습니다 — 1.5.0부터는 게임 우편함에 와서 「받기」로 받고, 예전 버전은 켤 때 바로 받아요');
       renderDotpot(view);
     } catch (e) { toast(e.message, true); }
@@ -126,6 +129,7 @@ async function drawEvents(body, view) {
       h('h3', '재화 뿌리기'),
       h('label.dp-row', useB, h('span', '씨앗 꾸러미'), nB, h('span', '개')),
       h('label.dp-row', useT, h('span', '화분 뽑기권'), nT, h('span', '장')),
+      h('label.dp-row', useG, h('span', '배경 뽑기권'), nG, h('span', '장')),
       h('label.dp-row', h('span', '알림 글'), msg),
       h('div.dp-row', h('label', toAll, ' 모두에게'), pickLabel),
       pk.el,
@@ -133,9 +137,9 @@ async function drawEvents(body, view) {
       h('label.dp-row', incNew, h('span', '모두에게일 때: 이벤트 뒤 7일 안에 처음 켠 사람도 받기')),
       h('button.btn.btn--primary', { onclick: send }, '뿌리기')),
     h('h3', '지금까지 이벤트'),
-    res.events.length ? h('div.dp-scroll', h('table.table', h('thead', h('tr', ['번호', '보냄', '끝', '꾸러미', '뽑기권', '대상', '받음', '글', ''].map((c) => h('th', c)))),
+    res.events.length ? h('div.dp-scroll', h('table.table', h('thead', h('tr', ['번호', '보냄', '끝', '꾸러미', '화분 뽑기권', '배경 뽑기권', '대상', '받음', '글', ''].map((c) => h('th', c)))),
       h('tbody', res.events.map((e) => h('tr' + (e.cancelled ? '.dp-banned' : ''),
-        h('td.mono', String(e.id)), h('td', kst(e.start_at)), h('td', kst(e.end_at)), h('td.num', String(e.bundles)), h('td.num', String(e.tickets)),
+        h('td.mono', String(e.id)), h('td', kst(e.start_at)), h('td', kst(e.end_at)), h('td.num', String(e.bundles)), h('td.num', String(e.tickets)), h('td.num', String(e.bg_tickets || 0)),
         h('td', e.target_all ? '모두' : `고른 ${e.targets}명`), h('td.num', String(e.granted)), h('td', e.msg),
         h('td', e.cancelled ? '취소됨' : h('button.btn.btn--ghost.btn--sm', { onclick: async () => {
           if (!confirm('이 이벤트를 취소할까요? (이미 받은 사람은 그대로)')) return;
