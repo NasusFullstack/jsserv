@@ -100,7 +100,7 @@ async function drawEvents(body, view) {
   const nB = h('input.cinput.dp-num', { type: 'number', min: 1, max: 99, value: 1 });
   const useT = h('input', { type: 'checkbox' });
   const nT = h('input.cinput.dp-num', { type: 'number', min: 1, max: 99, value: 1 });
-  const msg = h('input.cinput', { placeholder: '알림 글 (예: 추석 선물이에요!)', maxlength: 60 });
+  const msg = h('input.cinput', { placeholder: '우편 내용 (예: 추석 선물이에요!)', maxlength: 60 });
   const toAll = h('input', { type: 'radio', name: 'dpto', checked: !picked.size });
   const toPicked = h('input', { type: 'radio', name: 'dpto', checked: !!picked.size });
   const when = h('input.cinput', { type: 'datetime-local' });
@@ -117,7 +117,7 @@ async function drawEvents(body, view) {
     if (!confirm(`${who}에게 ${b ? `꾸러미 ${b}개 ` : ''}${t ? `뽑기권 ${t}장 ` : ''}을 ${when.value ? when.value.replace('T', ' ') + '에' : '지금'} 뿌릴까요?`)) return;
     try {
       await call('POST', `${API}/events`, { bundles: b, tickets: t, msg: msg.value, targets, start_at: when.value || '', include_new: incNew.checked });
-      toast('뿌렸습니다 — 각자 게임을 켤 때 받아요');
+      toast('뿌렸습니다 — 1.5.0부터는 게임 우편함에 와서 「받기」로 받고, 예전 버전은 켤 때 바로 받아요');
       renderDotpot(view);
     } catch (e) { toast(e.message, true); }
   };

@@ -175,10 +175,42 @@ async def sync(request: Request):
     d = await _body(request) or {}
     await run_in_threadpool(store.touch, inst["id"], str(d.get("ver", "")), _device(request))
     rewarded = await _rewards(inst, d)
-    gifts, bal = await run_in_threadpool(store.apply_events, inst["id"])
+    if d.get("mail"):   # 우편함이 있는 게임(1.5.0~): 선물은 우편으로 — 「받기」를 눌러야 들어감
+        mail, bal = await run_in_threadpool(store.mail_of, inst["id"])
+        extra = {"gifts": [], "mail": mail}
+    else:               # 예전 게임: 켤 때 바로 지급
+        gifts, bal = await run_in_threadpool(store.apply_events, inst["id"])
+        extra = {"gifts": gifts}
     rates = await run_in_threadpool(store.get_rates)
     prog = await run_in_threadpool(store.progress_of, inst["id"])
-    return _ok({**bal, "gifts": gifts, "rewarded": rewarded, "rates": rates, **prog})
+    return _ok({**bal, **extra, "rewarded": rewarded, "rates": rates, **prog})
+
+
+@router.post("/mail")
+async def mail(request: Request):
+    """우편함 새로 보기 (받을 이벤트 + 최근 받은 것)"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    mail_, bal = await run_in_threadpool(store.mail_of, inst["id"])
+    return _ok({**bal, "mail": mail_})
+
+
+@router.post("/mail/claim")
+async def mail_claim(request: Request):
+    """우편 「받기」 — event = 이벤트 번호 또는 "all" (모두 받기). 한 이벤트는 한 번만"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    ev = d.get("event")
+    if ev != "all":
+        try:
+            ev = int(ev)
+        except (TypeError, ValueError):
+            return _err("우편 번호가 이상합니다")
+    gifts, mail_, bal, res = await run_in_threadpool(store.claim_mail, inst["id"], ev)
+    return _ok({**bal, "result": res, "gifts": gifts, "mail": mail_})
 
 
 @router.post("/draw")

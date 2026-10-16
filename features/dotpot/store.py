@@ -190,28 +190,71 @@ def balance(con, iid):
     return {"bundles": r["bundles"], "tickets": r["tickets"]}
 
 
-# ---- 이벤트: 받을 차례인 이벤트를 이 설치본에 지급 (켤 때·창을 열 때·뽑을 때 부름) ----
+# ---- 이벤트: 받을 차례인 이벤트 (예전 게임은 켤 때 바로 지급, 1.5.0~ 은 우편함에서 「받기」) ----
+
+def _due_events(con, iid, now):
+    """아직 안 받은, 지금 받을 수 있는 이벤트들 (기간 안 · 취소 안 됨 · 받을 사람)"""
+    inst = con.execute("SELECT created FROM installs WHERE id=?", (iid,)).fetchone()
+    rows = con.execute("SELECT * FROM events WHERE cancelled=0 AND start_at<=? AND end_at>=? AND id NOT IN "
+                       "(SELECT event FROM grants WHERE install=?) ORDER BY id", (now, now, iid)).fetchall()
+    out = []
+    for e in rows:
+        if e["target_all"]:
+            if not e["include_new"] and inst["created"] > e["start_at"]:
+                continue
+        elif not con.execute("SELECT 1 FROM event_targets WHERE event=? AND install=?", (e["id"], iid)).fetchone():
+            continue
+        out.append(e)
+    return out
+
+
+def _grant(con, iid, e, now):
+    con.execute("INSERT INTO grants (install, event, at) VALUES (?,?,?)", (iid, e["id"], now))
+    con.execute("UPDATE installs SET bundles=MIN(?, bundles+?), tickets=MIN(?, tickets+?) WHERE id=?",
+                (C.BALANCE_MAX, e["bundles"], C.BALANCE_MAX, e["tickets"], iid))
+    _ledger(con, iid, "event", e["bundles"], e["tickets"], str(e["id"]), now)
+    return {"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"]}
+
 
 def apply_events(iid, now=None):
     now = now or time.time()
-    gifts = []
     with Tx() as con:
-        inst = con.execute("SELECT created FROM installs WHERE id=?", (iid,)).fetchone()
-        rows = con.execute("SELECT * FROM events WHERE cancelled=0 AND start_at<=? AND end_at>=? AND id NOT IN "
-                           "(SELECT event FROM grants WHERE install=?)", (now, now, iid)).fetchall()
-        for e in rows:
-            if e["target_all"]:
-                if not e["include_new"] and inst["created"] > e["start_at"]:
-                    continue
-            elif not con.execute("SELECT 1 FROM event_targets WHERE event=? AND install=?", (e["id"], iid)).fetchone():
-                continue
-            con.execute("INSERT INTO grants (install, event, at) VALUES (?,?,?)", (iid, e["id"], now))
-            con.execute("UPDATE installs SET bundles=MIN(?, bundles+?), tickets=MIN(?, tickets+?) WHERE id=?",
-                        (C.BALANCE_MAX, e["bundles"], C.BALANCE_MAX, e["tickets"], iid))
-            _ledger(con, iid, "event", e["bundles"], e["tickets"], str(e["id"]), now)
-            gifts.append({"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"]})
+        gifts = [_grant(con, iid, e, now) for e in _due_events(con, iid, now)]
         bal = balance(con, iid)
     return gifts, bal
+
+
+def _mail_list(con, iid, now):
+    """우편함: 받을 것(기간 안) + 최근 받은 것 (MAIL_KEEP_DAYS 안, 최대 MAIL_MAX)"""
+    out = [{"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"],
+            "start": e["start_at"], "end": e["end_at"], "got": False} for e in _due_events(con, iid, now)]
+    got = con.execute("SELECT e.*, g.at got_at FROM grants g JOIN events e ON e.id=g.event WHERE g.install=? AND g.at>=? "
+                      "ORDER BY g.at DESC LIMIT ?", (iid, now - C.MAIL_KEEP_DAYS * 86400, C.MAIL_MAX)).fetchall()
+    out += [{"event": e["id"], "msg": e["msg"], "bundles": e["bundles"], "tickets": e["tickets"],
+             "start": e["start_at"], "end": e["end_at"], "got": True, "got_at": e["got_at"]} for e in got]
+    return out[:C.MAIL_MAX]
+
+
+def mail_of(iid, now=None):
+    now = now or time.time()
+    with Tx() as con:
+        return _mail_list(con, iid, now), balance(con, iid)
+
+
+def claim_mail(iid, eid, now=None):
+    """우편 「받기」: eid = 이벤트 번호 또는 "all" → (받은 것들, 우편함, 잔액, 결과 ok|got|gone)"""
+    now = now or time.time()
+    with Tx() as con:
+        due = _due_events(con, iid, now)
+        pick = due if eid == "all" else [e for e in due if e["id"] == eid]
+        gifts = [_grant(con, iid, e, now) for e in pick]
+        if gifts or eid == "all":
+            res = "ok"
+        elif con.execute("SELECT 1 FROM grants WHERE install=? AND event=?", (iid, eid)).fetchone():
+            res = "got"   # 이미 받음 (두 번 누름·다른 창)
+        else:
+            res = "gone"  # 기간이 지났거나 취소됨
+        return gifts, _mail_list(con, iid, now), balance(con, iid), res
 
 
 # ---- 뽑기: 같은 요청 번호면 앞 결과 그대로 (네트워크 재시도에 두 번 깎이지 않게) ----

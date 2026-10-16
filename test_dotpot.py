@@ -214,6 +214,37 @@ client.post("/dotpot/api/admin/events/%d/cancel" % eid, headers=KEY)
 check("취소한 이벤트는 안 감", not any(g["msg"] == "취소될 것" for g in client.post("/dotpot/api/sync", json={}, headers=H(B, DEV_B)).json()["gifts"]))
 check("개수 0 이벤트는 거절", client.post("/dotpot/api/admin/events", json={"bundles": 0, "tickets": 0}, headers=KEY).status_code == 400)
 
+# ---------- 우편함 (1.5.0~: sync 에 mail=1 → 바로 지급하지 않고 우편으로, 「받기」로 지급) ----------
+M = reg(device="m" * 64, ip="10.0.0.7").json()
+HM = H(M, "m" * 64)
+e1 = client.post("/dotpot/api/admin/events", json={"bundles": 2, "tickets": 1, "msg": "우편 선물"}, headers=KEY).json()["id"]
+e2 = client.post("/dotpot/api/admin/events", json={"bundles": 1, "msg": "우편 둘째"}, headers=KEY).json()["id"]
+rm = client.post("/dotpot/api/sync", json={"mail": 1}, headers=HM).json()
+due = [m for m in rm.get("mail", []) if not m["got"]]
+check("우편함 게임: sync 는 지급 없이 우편 목록", rm["gifts"] == [] and {e1, e2} <= {m["event"] for m in due} and rm["bundles"] == 5, str(rm)[:300])
+check("우편에 기간(끝 시각)", all(m["end"] > time.time() for m in due), str(due)[:200])
+b0 = rm["bundles"]
+rc = client.post("/dotpot/api/mail/claim", json={"event": e1}, headers=HM).json()
+check("우편 받기 → 꾸러미+2·뽑기권+1, 받은 우편은 「받음」으로 남음", rc["result"] == "ok" and rc["bundles"] == b0 + 2 and len(rc["gifts"]) == 1
+      and any(m["event"] == e1 and m["got"] for m in rc["mail"]) and any(m["event"] == e2 and not m["got"] for m in rc["mail"]), str(rc)[:300])
+rc2 = client.post("/dotpot/api/mail/claim", json={"event": e1}, headers=HM).json()
+check("같은 우편 두 번 → 안 줌 (got)", rc2["result"] == "got" and rc2["bundles"] == rc["bundles"] and rc2["gifts"] == [], str(rc2)[:200])
+ra3 = client.post("/dotpot/api/sync", json={}, headers=HM).json()
+check("예전 게임 sync 는 남은 우편을 바로 지급 (받은 건 다시 안 줌)", [g["event"] for g in ra3["gifts"] if g["event"] in (e1, e2)] == [e2], str(ra3["gifts"])[:200])
+e3 = client.post("/dotpot/api/admin/events", json={"tickets": 2, "msg": "우편 셋째"}, headers=KEY).json()["id"]
+e4 = client.post("/dotpot/api/admin/events", json={"bundles": 1, "msg": "우편 넷째"}, headers=KEY).json()["id"]
+rn = client.post("/dotpot/api/mail", json={}, headers=HM).json()
+check("새로 고침(/mail) → 새 우편이 보임", {e3, e4} <= {m["event"] for m in rn["mail"] if not m["got"]}, str(rn)[:200])
+ral = client.post("/dotpot/api/mail/claim", json={"event": "all"}, headers=HM).json()
+check("모두 받기", ral["result"] == "ok" and {e3, e4} <= {g["event"] for g in ral["gifts"]} and not any(not m["got"] for m in ral["mail"]), str(ral)[:300])
+e5 = client.post("/dotpot/api/admin/events", json={"bundles": 9, "msg": "취소될 우편"}, headers=KEY).json()["id"]
+client.post("/dotpot/api/admin/events/%d/cancel" % e5, headers=KEY)
+rx = client.post("/dotpot/api/mail/claim", json={"event": e5}, headers=HM).json()
+check("취소된 우편은 못 받음 (gone)", rx["result"] == "gone" and rx["gifts"] == [] and not any(m["event"] == e5 for m in rx["mail"]), str(rx)[:200])
+check("우편 번호가 이상하면 400", client.post("/dotpot/api/mail/claim", json={"event": "x"}, headers=HM).status_code == 400)
+check("남의 우편: 고른 사람에게만 간 이벤트는 못 받음",
+      client.post("/dotpot/api/mail/claim", json={"event": client.post("/dotpot/api/admin/events", json={"bundles": 1, "msg": "B 전용", "targets": [B["id"]]}, headers=KEY).json()["id"]}, headers=HM).json()["result"] == "gone")
+
 # ---------- 의문의 상인 · 공방 · 도전과제 ----------
 CR = reg({"ver": "1.3.0"}, device="d" * 64, ip="10.0.0.9").json()
 con = db()

@@ -51,9 +51,13 @@ for _n in range(2, 13):    # 처음으로 2~12단계: 짝수 단계 = 화분 뽑
     ACHIEVEMENTS["stage%d" % _n] = (0, 1) if _n % 2 == 0 else (1, 0)
 # 수집 목표 (게임이 종류를 확인, 서버는 다 키운 식물 수로만 확인): 이름 → 다 키운 식물이 이만큼은 있어야
 COLLECT_NEED = {"col_spring": 3, "col_field": 3, "col_quiet": 2, "col_autumn": 2, "col_evergreen": 2,
-                "col_flowers": 8, "col_trees": 5, "col_pastel": 1}
+                "col_flowers": 10, "col_trees": 8, "col_pastel": 1, "col_cactus": 4}   # 꽃 10종(할미꽃·제비꽃) · 나무 8종(몬스테라·무궁화·치자나무)
 ACHIEVEMENTS.update({"col_spring": (1, 0), "col_field": (1, 0), "col_quiet": (1, 0), "col_autumn": (0, 1), "col_evergreen": (0, 1),
-                     "col_flowers": (2, 2), "col_trees": (2, 2), "col_pastel": (1, 0), "col_premium": (0, 2)})   # col_premium = 고급 나무 다 키움 (서버가 셈)
+                     "col_flowers": (2, 2), "col_trees": (2, 2), "col_pastel": (1, 0), "col_premium": (0, 2), "col_cactus": (1, 1)})   # col_premium = 고급 나무 다 키움 (서버가 셈)
+
+# ---- 우편함: 받은 이벤트 우편은 며칠 동안 「받았어요」로 남김 · 한 번에 보여 줄 우편 수 ----
+MAIL_KEEP_DAYS = 14
+MAIL_MAX = 30
 
 # ---- 일일 퀘스트 (서버 날짜 KST 하루에 한 번씩): 이름 → (꾸러미, 화분 뽑기권) ----
 DAILY = {"care1": (1, 0), "care3": (1, 0), "draw1": (0, 2)}
