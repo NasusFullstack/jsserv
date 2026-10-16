@@ -177,7 +177,8 @@ async def sync(request: Request):
     rewarded = await _rewards(inst, d)
     gifts, bal = await run_in_threadpool(store.apply_events, inst["id"])
     rates = await run_in_threadpool(store.get_rates)
-    return _ok({**bal, "gifts": gifts, "rewarded": rewarded, "rates": rates})
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({**bal, "gifts": gifts, "rewarded": rewarded, "rates": rates, **prog})
 
 
 @router.post("/draw")
@@ -201,7 +202,8 @@ async def draw(request: Request):
     if err:
         await run_in_threadpool(store.reject, inst["id"], "no_bundle", "req=" + req)
         return _err("꾸러미가 없어요", 409, rewarded=rewarded, **bal)
-    return _ok({"seed": result, "rewarded": rewarded, "rates": rates, **bal})
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"seed": result, "rewarded": rewarded, "rates": rates, **bal, **prog})
 
 
 @router.post("/potdraw")
@@ -219,14 +221,105 @@ async def potdraw(request: Request):
     pot = rules.roll_pot(size, rates)
 
     def save_row(con, now):
-        con.execute("INSERT INTO pots (pid, install, size, lux, n, drawn) VALUES (?,?,?,?,?,?)",
+        con.execute("INSERT INTO pots (pid, install, size, lux, n, drawn, src) VALUES (?,?,?,?,?,?,'draw')",
                     (pot["pid"], inst["id"], pot["size"], 1 if pot["lux"] else 0, pot["n"], now))
 
     result, bal, err = await run_in_threadpool(store.draw, inst["id"], req, "pot", "tickets", lambda: (pot, save_row))
     if err:
         await run_in_threadpool(store.reject, inst["id"], "no_ticket", "req=" + req)
         return _err("화분 뽑기권이 없어요", 409, rewarded=rewarded, **bal)
-    return _ok({"pot": result, "rewarded": rewarded, "rates": rates, **bal})
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"pot": result, "rewarded": rewarded, "rates": rates, **bal, **prog})
+
+
+def _ids(d, key, rx):
+    """맡긴 것 번호 3개 (서로 다름)"""
+    xs = d.get(key)
+    if not isinstance(xs, list) or len(xs) != C.CRAFT_COUNT:
+        return None
+    xs = [str(x) for x in xs]
+    if len(set(xs)) != C.CRAFT_COUNT or not all(rx.match(x) for x in xs):
+        return None
+    return xs
+
+
+@router.post("/fuse")
+async def fuse(request: Request):
+    """의문의 상인: 일반 씨앗·묘목 3개 → 고른 것(씨앗 flower · 묘목 tree)의 씨앗 하나, 정해진 확률로 고급 묘목"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    req = str(d.get("req", ""))
+    sids = _ids(d, "sids", SID_RE)
+    pick = str(d.get("pick", ""))
+    if not REQ_RE.match(req) or sids is None or pick not in ("flower", "tree"):
+        return _err("요청이 이상합니다")
+    rates = await run_in_threadpool(store.get_rates)
+    seed = rules.roll_fuse(rates, pick)
+
+    def make():
+        def save_row(con, now):
+            con.execute("INSERT INTO seeds (sid, install, kind, ptype, rare, n, drawn, src) VALUES (?,?,?,?,0,?,?,'fuse')",
+                        (seed["sid"], inst["id"], seed["kind"], seed["ptype"], seed["n"], now))
+        return seed, save_row
+
+    result, bal, err = await run_in_threadpool(store.fuse, inst["id"], req, sids, make)
+    if err:
+        await run_in_threadpool(store.reject, inst["id"], "fuse_" + err, ",".join(sids))
+        return _err("맡길 수 없는 씨앗이 있어요 (이미 쓴 씨앗·신비한·고급 씨앗은 안 돼요)", 409, **bal)
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"seed": result, "rates": rates, **bal, **prog})
+
+
+@router.post("/kiln")
+async def kiln(request: Request):
+    """공방: 화분 3개 → 다시 구운 화분 하나 (크기는 아무거나, 정해진 확률로 고급)"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    req = str(d.get("req", ""))
+    raw = d.get("pots")
+    pots = []
+    if isinstance(raw, list) and len(raw) == C.CRAFT_COUNT:
+        for x in raw:
+            if isinstance(x, dict) and SID_RE.match(str(x.get("pid", ""))):
+                sid = str(x.get("sid", ""))
+                pots.append({"pid": str(x["pid"]), "sid": sid if SID_RE.match(sid) else "", "size": str(x.get("size", "")), "lux": x.get("lux") is True})
+    if not REQ_RE.match(req) or len(pots) != C.CRAFT_COUNT or len({p["pid"] for p in pots}) != C.CRAFT_COUNT:
+        return _err("요청이 이상합니다")
+    pids = [p["pid"] for p in pots]
+    rates = await run_in_threadpool(store.get_rates)
+    pot = rules.roll_kiln(rates)
+
+    def make():
+        def save_row(con, now):
+            con.execute("INSERT INTO pots (pid, install, size, lux, n, drawn, src) VALUES (?,?,?,?,?,?,'kiln')",
+                        (pot["pid"], inst["id"], pot["size"], 1 if pot["lux"] else 0, pot["n"], now))
+        return pot, save_row
+
+    result, bal, err = await run_in_threadpool(store.kiln, inst["id"], req, pots, make)
+    if err:
+        await run_in_threadpool(store.reject, inst["id"], "kiln_" + err, ",".join(pids))
+        return _err("맡길 수 없는 화분이 있어요", 409, **bal)
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"pot": result, "rates": rates, **bal, **prog})
+
+
+@router.post("/achieve")
+async def achieve(request: Request):
+    """도전과제 보상 받기 — 조건은 서버가 확인, 한 번만"""
+    inst, bad = await _auth(request)
+    if bad:
+        return bad
+    d = await _body(request) or {}
+    key = str(d.get("key", ""))[:20]
+    bal, res = await run_in_threadpool(store.achieve, inst["id"], key)
+    if res == "not_yet":
+        await run_in_threadpool(store.reject, inst["id"], "ach_not_yet", key)
+    prog = await run_in_threadpool(store.progress_of, inst["id"])
+    return _ok({"result": res, "key": key, **bal, **prog})
 
 
 @router.post("/reward")
@@ -356,6 +449,7 @@ def admin_install(iid: str, request: Request):
     return _ok({
         "install": inst, "ban": store.ban_of(iid, inst["device"]),
         "ledger": q("ledger"), "draws": q("draws"), "seeds": q("seeds"), "pots": q("pots"), "grants": q("grants"), "rejects": q("rejects"),
+        "achievements": q("achievements"),
         "same_device": store.rows("SELECT id, last_seen FROM installs WHERE device=? AND device<>'' AND id<>?", (inst["device"], iid)),
     })
 

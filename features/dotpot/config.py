@@ -25,10 +25,23 @@ MIGRATE_MAX_LEGACY = 60    # 예전 판에서 키우던 식물·씨앗 (보상 �
 BALANCE_MAX = 999
 
 # ---- 뽑기 확률: 기본값 (관리 화면 「확률」에서 바꾸면 DB 값이 우선 — 게임은 켤 때·뽑을 때 받아 보여 줌) ----
-RATE_DEFAULTS = {"premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20}
-RATE_LIMITS = {"premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0)}
+RATE_DEFAULTS = {"premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05}
+RATE_LIMITS = {"premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0)}
 RATE_NAMES = {"premium": "고급 나무 (씨앗 꾸러미)", "tree": "묘목 · 나무 (고급이 아닐 때)",
-              "rare": "신비한 씨앗·묘목 (고급이 아닐 때)", "lux": "고급 화분 (화분 뽑기)"}
+              "rare": "신비한 씨앗·묘목 (고급이 아닐 때)", "lux": "고급 화분 (화분 뽑기)",
+              "fuse": "고급 묘목 (의문의 상인 — 씨앗 3개)", "kiln": "고급 화분 (공방 — 화분 3개)"}
+
+# ---- 의문의 상인(씨앗 3개 → 고른 씨앗 하나) · 공방(화분 3개 → 다시 구운 화분 하나) ----
+CRAFT_COUNT = 3
+LEGACY_POTS_MAX = 60       # 예전 판에서 모아 둔 화분 (처음 한 번 등록)
+
+# ---- 도전과제: 이름 → (꾸러미, 화분 뽑기권). 한 유저에 한 번 ----
+ACH_POTS = 30              # 화분 수집가: 화분 30개 모으기
+ACH_SEEDS = 30             # 씨앗 매니아: 꾸러미 30번 열기
+ACHIEVEMENTS = {"pots30": (0, 5), "seeds30": (0, 5)}
+for _n in range(2, 13):    # 처음으로 2~12단계: 짝수 단계 = 화분 뽑기권, 홀수 = 꾸러미
+    ACHIEVEMENTS["stage%d" % _n] = (0, 1) if _n % 2 == 0 else (1, 0)
+STAGE_HOURS = 0.6          # 처음 키우는 유저(옮겨 온 게 아님)는 등록 뒤 (단계-1)×이만큼 시간이 지나야 단계 도전과제 인정
 POT_SIZES = ("small", "big", "huge")
 PREMIUM_TREES = {"pine": "", "rubber": "", "cherry": "spring", "ginkgo": "autumn", "maple": "autumn", "xmas": "winter"}
 SEASON_MONTHS = {"spring": (3, 4, 5), "autumn": (9, 10, 11), "winter": (12,)}

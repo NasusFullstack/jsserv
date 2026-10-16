@@ -214,6 +214,104 @@ client.post("/dotpot/api/admin/events/%d/cancel" % eid, headers=KEY)
 check("취소한 이벤트는 안 감", not any(g["msg"] == "취소될 것" for g in client.post("/dotpot/api/sync", json={}, headers=H(B, DEV_B)).json()["gifts"]))
 check("개수 0 이벤트는 거절", client.post("/dotpot/api/admin/events", json={"bundles": 0, "tickets": 0}, headers=KEY).status_code == 400)
 
+# ---------- 의문의 상인 · 공방 · 도전과제 ----------
+CR = reg({"ver": "1.3.0"}, device="d" * 64, ip="10.0.0.9").json()
+con = db()
+now = time.time()
+for i, (k, rare) in enumerate([("flower", 0), ("tree", 0), ("flower", 0), ("flower", 1), ("premium", 0)]):
+    con.execute("INSERT INTO seeds (sid, install, kind, ptype, rare, n, drawn) VALUES (?,?,?,?,?,?,?)",
+                ("cs%d" % i, CR["id"], k, "pine" if k == "premium" else "", rare, 1, now))
+for i in range(5):
+    con.execute("INSERT INTO pots (pid, install, size, lux, n, drawn) VALUES (?,?,?,?,?,?)", ("cp%d" % i, CR["id"], "small", 0, 1, now))
+con.commit()
+con.close()
+fr = req()
+r = client.post("/dotpot/api/fuse", json={"req": fr, "sids": ["cs0", "cs1", "cs2"], "pick": "tree"}, headers=H(CR, "d" * 64))
+fs = r.json().get("seed", {})
+check("상인: 일반 씨앗 3개 → 고른 묘목(또는 고급) 하나", r.status_code == 200 and fs.get("kind") in ("tree", "premium"), r.text[:200])
+r2 = client.post("/dotpot/api/fuse", json={"req": fr, "sids": ["cs0", "cs1", "cs2"], "pick": "tree"}, headers=H(CR, "d" * 64))
+check("상인: 같은 요청 번호면 같은 결과", r2.json().get("seed", {}).get("sid") == fs.get("sid"), r2.text[:200])
+r = client.post("/dotpot/api/fuse", json={"req": req(), "sids": ["cs0", "cs1", "cs2"], "pick": "flower"}, headers=H(CR, "d" * 64))
+check("상인: 이미 맡긴 씨앗은 다시 못 씀 → 409", r.status_code == 409, r.text[:200])
+r = client.post("/dotpot/api/fuse", json={"req": req(), "sids": ["cs3", "cs4", fs.get("sid", "x")], "pick": "flower"}, headers=H(CR, "d" * 64))
+check("상인: 신비한·고급 씨앗은 안 됨 → 409", r.status_code == 409, r.text[:200])
+r = client.post("/dotpot/api/fuse", json={"req": req(), "sids": ["cs3", "cs3", "cs4"], "pick": "flower"}, headers=H(CR, "d" * 64))
+check("상인: 같은 씨앗 두 번·개수 틀림 → 400", r.status_code == 400, r.text[:200])
+rr = client.post("/dotpot/api/sync", json={"rewards": [{"sid": "cs0", "outcome": "grown"}]}, headers=H(CR, "d" * 64)).json()
+check("상인에게 맡긴 씨앗으로는 보상 없음", rr["rewarded"] and rr["rewarded"][0]["result"] == "used", str(rr.get("rewarded")))
+N = 4000
+cnt = {"premium": 0, "tree": 0, "flower": 0}
+for i in range(N):
+    cnt[rules.roll_fuse({"fuse": 0.05}, "flower", 10)["kind"]] += 1
+check("상인 고급 확률 약 5%% (%d/%d)" % (cnt["premium"], N), abs(cnt["premium"] / N - 0.05) < 0.012 and cnt["tree"] == 0, str(cnt))
+kr = req()
+r = client.post("/dotpot/api/kiln", json={"req": kr, "pots": [{"pid": "cp0"}, {"pid": "cp1"}, {"pid": "cp2"}]}, headers=H(CR, "d" * 64))
+kp = r.json().get("pot", {})
+check("공방: 화분 3개 → 다시 구운 화분 하나", r.status_code == 200 and kp.get("size") in DC.POT_SIZES, r.text[:200])
+r = client.post("/dotpot/api/kiln", json={"req": req(), "pots": [{"pid": "cp0"}, {"pid": "cp3"}, {"pid": "cp4"}]}, headers=H(CR, "d" * 64))
+check("공방: 이미 맡긴 화분은 다시 못 씀 → 409", r.status_code == 409, r.text[:200])
+r = client.post("/dotpot/api/kiln", json={"req": req(), "pots": [{"pid": "st1", "sid": "cs3"}, {"pid": "st2", "sid": "cs4"}, {"pid": "cp3"}]}, headers=H(CR, "d" * 64))
+check("공방: 씨앗의 기본 화분은 그 자리에서 등록해 맡김", r.status_code == 200, r.text[:200])
+r = client.post("/dotpot/api/kiln", json={"req": req(), "pots": [{"pid": "st3", "sid": "cs3"}, {"pid": "cp4"}, {"pid": "x9"}]}, headers=H(CR, "d" * 64))
+check("공방: 같은 씨앗의 기본 화분 두 번 · 지어낸 화분은 안 됨 → 409", r.status_code == 409, r.text[:200])
+r = client.post("/dotpot/api/kiln", json={"req": req(), "pots": [{"pid": "lg1", "size": "big", "lux": True}, {"pid": "lg2", "size": "small"}, {"pid": "cp4"}]}, headers=H(CR, "d" * 64))
+check("공방: 새로 시작한 유저는 예전 판 화분이 없음 → 409", r.status_code == 409, r.text[:200])
+r = client.post("/dotpot/api/kiln", json={"req": req(), "pots": [{"pid": "lg1", "size": "big", "lux": True}, {"pid": "lg2", "size": "small"}, {"pid": "lg3", "size": "huge"}]}, headers=H(B, DEV_B))
+check("공방: 옮겨 온 유저는 예전 판 화분을 맡길 수 있음", r.status_code == 200, r.text[:200])
+sizes = {s: 0 for s in DC.POT_SIZES}
+lux = 0
+for i in range(N):
+    p = rules.roll_kiln({"kiln": 0.05})
+    sizes[p["size"]] += 1
+    lux += 1 if p["lux"] else 0
+check("공방: 크기는 고루 · 고급 약 5%%", all(abs(v / N - 1 / 3) < 0.04 for v in sizes.values()) and abs(lux / N - 0.05) < 0.012, str(sizes) + " lux %d" % lux)
+r = client.post("/dotpot/api/achieve", json={"key": "pots30"}, headers=H(CR, "d" * 64))
+check("도전과제: 화분 30개 전엔 안 됨", r.json().get("result") == "not_yet", r.text[:200])
+con = db()
+for i in range(30):
+    con.execute("INSERT INTO pots (pid, install, size, lux, n, drawn) VALUES (?,?,?,?,?,?)", ("cq%d" % i, CR["id"], "small", 0, 1, now))
+con.commit()
+con.close()
+t0 = client.post("/dotpot/api/sync", json={}, headers=H(CR, "d" * 64)).json()
+r = client.post("/dotpot/api/achieve", json={"key": "pots30"}, headers=H(CR, "d" * 64)).json()
+check("도전과제: 화분 수집가 → 뽑기권 +5", r.get("result") == "ok" and r["tickets"] == t0["tickets"] + 5 and "pots30" in r.get("ach", []), str(r)[:200])
+r = client.post("/dotpot/api/achieve", json={"key": "pots30"}, headers=H(CR, "d" * 64)).json()
+check("도전과제: 한 번만", r.get("result") == "dup" and r["tickets"] == t0["tickets"] + 5, str(r)[:200])
+r = client.post("/dotpot/api/achieve", json={"key": "stage5"}, headers=H(CR, "d" * 64)).json()
+check("도전과제: 막 시작한 유저의 5단계는 아직 (시간 확인)", r.get("result") == "not_yet", str(r)[:200])
+r = client.post("/dotpot/api/achieve", json={"key": "stage3"}, headers=H(B, DEV_B)).json()
+check("도전과제: 옮겨 온 유저의 3단계 → 꾸러미 +1", r.get("result") == "ok", str(r)[:200])
+r = client.post("/dotpot/api/achieve", json={"key": "nope"}, headers=H(CR, "d" * 64)).json()
+check("도전과제: 없는 이름", r.get("result") == "unknown", str(r)[:200])
+s = client.post("/dotpot/api/sync", json={}, headers=H(CR, "d" * 64)).json()
+check("켤 때 도전과제 진행·받은 것", s.get("stats", {}).get("pots", 0) >= 30 and "pots30" in s.get("ach", []), str(s)[:200])
+
+# 옛 꼴 DB(화분 열쇠가 번호 하나) → 새 꼴로 옮김
+import importlib  # noqa: E402
+from features.dotpot import store as DS  # noqa: E402
+old_db = os.path.join(WORK, "old.sqlite3")
+oc = sqlite3.connect(old_db)
+oc.executescript("""CREATE TABLE installs (id TEXT PRIMARY KEY, secret_sha TEXT NOT NULL, created REAL NOT NULL, last_seen REAL NOT NULL,
+    ver TEXT NOT NULL DEFAULT '', bundles INTEGER NOT NULL, tickets INTEGER NOT NULL, migrated_bundles INTEGER NOT NULL DEFAULT 0,
+    migrated_tickets INTEGER NOT NULL DEFAULT 0, device TEXT NOT NULL DEFAULT '');
+CREATE TABLE seeds (sid TEXT NOT NULL, install TEXT NOT NULL, kind TEXT NOT NULL, ptype TEXT NOT NULL DEFAULT '', rare INTEGER NOT NULL DEFAULT 0,
+    n INTEGER NOT NULL DEFAULT 0, drawn REAL NOT NULL, legacy INTEGER NOT NULL DEFAULT 0, rewarded TEXT, rewarded_at REAL, PRIMARY KEY (install, sid));
+CREATE TABLE pots (pid TEXT PRIMARY KEY, install TEXT NOT NULL, size TEXT NOT NULL, lux INTEGER NOT NULL, n INTEGER NOT NULL, drawn REAL NOT NULL);
+INSERT INTO pots VALUES ('pold', 'u1', 'big', 1, 5, 1.0);""")
+oc.close()
+_old = (DC.DB, DS._ready)
+DC.DB = old_db
+DS._ready = False
+con = DS.connect()
+pk = [r["name"] for r in sorted(con.execute("PRAGMA table_info(pots)"), key=lambda r: r["pk"]) if r["pk"]]
+rowp = con.execute("SELECT * FROM pots").fetchone()
+icol = {r["name"] for r in con.execute("PRAGMA table_info(installs)")}
+scol = {r["name"] for r in con.execute("PRAGMA table_info(seeds)")}
+con.close()
+check("옛 DB 옮김: 화분 열쇠 (유저, 번호) · 자료 그대로 · 새 칸", pk == ["install", "pid"] and rowp["pid"] == "pold" and rowp["lux"] == 1 and rowp["used"] == 0
+      and "legacy_pots" in icol and "used" in scol, str(pk) + str(dict(rowp)))
+DC.DB, DS._ready = _old[0], True
+
 # ---------- 차단 ----------
 r = client.post("/dotpot/api/admin/bans", json={"kind": "install", "value": A["id"], "reason": "중복 보상 버그 사용"}, headers=KEY)
 bid = r.json()["id"]

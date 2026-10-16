@@ -45,6 +45,23 @@ def roll_pot(size, rates):
     return {"pid": "p" + secrets.token_hex(8), "size": size, "lux": _rand.random() < rates["lux"], "n": _rand.randrange(1, 2 ** 31)}
 
 
+def roll_fuse(rates, pick, month=None):
+    """의문의 상인: 고급은 정해진 확률(rates['fuse']), 아니면 고른 종류(flower·tree)의 보통 씨앗"""
+    month = month or now_month()
+    pool = premium_pool(month)
+    out = {"sid": "s" + secrets.token_hex(8), "kind": pick, "ptype": "", "rare": False, "n": _rand.randrange(1, 2 ** 31)}
+    if pool and _rand.random() < rates["fuse"]:
+        out["kind"] = "premium"
+        out["ptype"] = _rand.choice(pool)
+    return out
+
+
+def roll_kiln(rates):
+    """공방: 크기는 셋 중 아무거나, 고급은 정해진 확률(rates['kiln'])"""
+    return {"pid": "p" + secrets.token_hex(8), "size": _rand.choice(C.POT_SIZES), "lux": _rand.random() < rates["kiln"],
+            "n": _rand.randrange(1, 2 ** 31)}
+
+
 def clean_rates(d):
     """관리 화면이 보낸 확률 (0~1) → 바꿀 것만. 범위를 벗어나면 ValueError"""
     out = {}

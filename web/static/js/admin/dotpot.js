@@ -85,8 +85,9 @@ async function drawOne(body, view, id) {
       } }, '개수 고치기')),
     table('장부 (개수가 바뀐 모든 일)', d.ledger, ['at', 'reason', 'd_bundles', 'd_tickets', 'ref']),
     table('거절 (버그·조작 의심)', d.rejects, ['at', 'reason', 'detail']),
-    table('뽑은 씨앗', d.seeds, ['drawn', 'sid', 'kind', 'ptype', 'rare', 'n', 'legacy', 'rewarded', 'rewarded_at']),
-    table('뽑은 화분', d.pots, ['drawn', 'pid', 'size', 'lux', 'n']),
+    table('씨앗 (used = 상인에게 맡김 · src = fuse 상인에게 받음)', d.seeds, ['drawn', 'sid', 'kind', 'ptype', 'rare', 'n', 'legacy', 'src', 'used', 'rewarded', 'rewarded_at']),
+    table('화분 (src = draw 뽑기 · kiln 공방 · seed:… 기본 화분 · legacy 예전 판, used = 공방에 맡김)', d.pots, ['drawn', 'pid', 'size', 'lux', 'n', 'src', 'used']),
+    table('받은 도전과제', d.achievements || [], ['at', 'key']),
     table('받은 이벤트', d.grants, ['at', 'event']));
 }
 
@@ -273,7 +274,7 @@ async function drawRates(body, view) {
 
 // ---------- 내려받기 ----------
 function drawExport(body) {
-  const tables = [['installs', '유저'], ['ledger', '장부'], ['draws', '뽑기'], ['seeds', '씨앗'], ['pots', '화분'], ['events', '이벤트'], ['grants', '받은 이벤트'], ['rejects', '거절'], ['bans', '차단'], ['rate_log', '확률 기록']];
+  const tables = [['installs', '유저'], ['ledger', '장부'], ['draws', '뽑기·상인·공방'], ['seeds', '씨앗'], ['pots', '화분'], ['achievements', '도전과제'], ['events', '이벤트'], ['grants', '받은 이벤트'], ['rejects', '거절'], ['bans', '차단'], ['rate_log', '확률 기록']];
   body.replaceChildren(h('p.view__sub', '표 전체를 CSV 로 (엑셀에서 열림). 비밀값 지문은 빠집니다.'),
     h('div.dp-tools', tables.map(([t, l]) => h('button.btn.btn--ghost.btn--sm', { onclick: async () => {
       try {
