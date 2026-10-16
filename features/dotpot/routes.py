@@ -224,7 +224,7 @@ async def draw(request: Request):
         return _err("요청 번호가 이상합니다")
     rewarded = await _rewards(inst, d)   # 묶어 온 보상 먼저 (받은 꾸러미로 바로 뽑을 수 있게)
     rates = await run_in_threadpool(store.get_rates)
-    seed = rules.roll_seed(rates)
+    seed = rules.roll_seed(rates, mystic=bool(d.get("mystic")))   # 예전 게임은 신비한 꽃을 몰라서 안 줌
 
     def save_row(con, now):
         con.execute("INSERT INTO seeds (sid, install, kind, ptype, rare, n, drawn) VALUES (?,?,?,?,?,?,?)",

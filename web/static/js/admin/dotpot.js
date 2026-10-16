@@ -233,13 +233,20 @@ async function drawRates(body, view) {
   const out = h('div');
   const val = (k) => Math.max(0, +inputs[k].value || 0) / 100;
   const out2 = h('div');
+  const out3 = h('div');
   const sizeKeys = ['kiln_small', 'kiln_big', 'kiln_huge'];
   function preview() {
     const p = val('premium'), t = val('tree'), r = val('rare');
     const card = (k, v) => h('div.dp-card', h('small', k), h('b.mono', `${pct(v)}%`));
     out.replaceChildren(
       h('p.view__sub', '꾸러미 하나를 열면 실제로 이렇게 나와요 (시즌 고급 나무는 그 달에만 종류에 끼어요)'),
-      h('div.dp-cards', card('고급 나무', p), card('묘목 (나무)', (1 - p) * t), card('꽃 씨앗', (1 - p) * (1 - t)), card('그중 신비한', (1 - p) * r), card('고급 화분 (화분 뽑기)', val('lux'))));
+      h('div.dp-cards', inputs.mystic ? card('신비한 꽃 5종 합 (게임엔 안 보임)', val('mystic')) : '', card('고급 나무', p), card('묘목 (나무)', (1 - p) * t), card('꽃 씨앗', (1 - p) * (1 - t)), card('그중 신비한', (1 - p) * r), card('고급 화분 (화분 뽑기)', val('lux'))));
+    if (inputs.fruit_rot) {
+      const gs = ['fruit_rot', 'fruit_meh', 'fruit_good', 'fruit_dept'].map(val), norm = 1 - gs.reduce((a, b) => a + b, 0);
+      out3.replaceChildren(
+        h('p.view__sub', norm >= 0 ? '열매 하나가 떨어지면 이렇게 나와요 (일반 = 나머지, 좋음·백화점급은 고급 열매 능력만큼 곱해서 오름)' : '⚠ 등급 합이 100% 를 넘어요 — 저장할 수 없어요'),
+        h('div.dp-cards', card('썩음', gs[0]), card('그럭저럭', gs[1]), card('일반', Math.max(0, norm)), card('좋음', gs[2]), card('백화점급', gs[3]), card('만렙 능력 2개', val('abil_two'))));
+    }
     if (!inputs.kiln_small) return;
     const sw = sizeKeys.map(val), sum = sw.reduce((a, b) => a + b, 0);
     const share = (i) => (sum > 0 ? sw[i] / sum : 1 / 3);
@@ -250,7 +257,7 @@ async function drawRates(body, view) {
   }
   const row = (k) => {
     const [lo, hi] = res.limits[k];
-    const inp = h('input.cinput.dp-num', { type: 'number', step: 0.1, min: lo * 100, max: hi * 100, value: pct(res.rates[k]), oninput: preview });
+    const inp = h('input.cinput.dp-num', { type: 'number', step: 0.01, min: lo * 100, max: hi * 100, value: pct(res.rates[k]), oninput: preview });
     inputs[k] = inp;
     const changed = Math.abs(res.rates[k] - res.defaults[k]) > 1e-9;
     return h('div.dp-row',
@@ -260,7 +267,7 @@ async function drawRates(body, view) {
       h('button.btn.btn--ghost.btn--sm', { onclick: () => { inp.value = pct(res.defaults[k]); preview(); } }, '기본값으로'));
   };
   const groups = res.groups || [['뽑기 확률', Object.keys(res.names)]];
-  const sections = groups.map(([title, keys], gi) => [h('h3', title), ...keys.filter((k) => res.names[k]).map(row), gi === 0 ? out : out2]).flat();
+  const sections = groups.map(([title, keys], gi) => [h('h3', title), ...keys.filter((k) => res.names[k]).map(row), [out, out2, out3][gi] || '']).flat();
   const note = h('input.cinput', { placeholder: '바꾼 이유 (예: 주말 고급 나무 이벤트)', maxlength: 200 });
   const save = async () => {
     const rates = {};

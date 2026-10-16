@@ -27,12 +27,15 @@ def now_month():
     return datetime.datetime.now(C.KST).month
 
 
-def roll_seed(rates, month=None):
-    """rates = 지금 확률 {premium, tree, rare, lux} (store.get_rates)"""
+def roll_seed(rates, month=None, mystic=False):
+    """rates = 지금 확률 {mystic, premium, tree, rare, lux} (store.get_rates). mystic = 신비한 꽃을 아는 게임(1.5.1~)인가"""
     month = month or now_month()
     pool = premium_pool(month)
     out = {"sid": "s" + secrets.token_hex(8), "kind": "flower", "ptype": "", "rare": False, "n": _rand.randrange(1, 2 ** 31)}
-    if pool and _rand.random() < rates["premium"]:
+    if mystic and _rand.random() < rates.get("mystic", 0.0):   # 신비한 꽃 1~4 · 생명의 꽃 (다섯 중 하나)
+        out["kind"] = "mystic"
+        out["ptype"] = _rand.choice(C.MYSTIC_TYPES)
+    elif pool and _rand.random() < rates["premium"]:
         out["kind"] = "premium"
         out["ptype"] = _rand.choice(pool)
     else:
@@ -76,6 +79,8 @@ def clean_rates(d):
         out[k] = round(float(v), 4)
     if all(k in out for k in C.KILN_SIZE_KEYS) and sum(out[k] for k in C.KILN_SIZE_KEYS) <= 0:
         raise ValueError("공방 크기 비율이 모두 0% 면 안 됩니다")
+    if all(k in out for k in C.FRUIT_GRADE_KEYS) and sum(out[k] for k in C.FRUIT_GRADE_KEYS) > 1.0:
+        raise ValueError("열매 등급(썩음·그럭저럭·좋음·백화점급) 합이 100% 를 넘으면 안 됩니다 (나머지가 일반)")
     return out
 
 

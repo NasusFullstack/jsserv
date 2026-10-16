@@ -242,6 +242,17 @@ client.post("/dotpot/api/admin/events/%d/cancel" % e5, headers=KEY)
 rx = client.post("/dotpot/api/mail/claim", json={"event": e5}, headers=HM).json()
 check("취소된 우편은 못 받음 (gone)", rx["result"] == "gone" and rx["gifts"] == [] and not any(m["event"] == e5 for m in rx["mail"]), str(rx)[:200])
 check("우편 번호가 이상하면 400", client.post("/dotpot/api/mail/claim", json={"event": "x"}, headers=HM).status_code == 400)
+# ---------- 신비한 꽃 · 생명의 꽃 (0.01% × 5 — 게임이 mystic=1 을 보낼 때만) ----------
+DR.rules._rand.seed(7)
+ms_new = [DR.rules.roll_seed({**DC.RATE_DEFAULTS, "mystic": 1.0}, mystic=True) for _ in range(50)]
+ms_old = [DR.rules.roll_seed({**DC.RATE_DEFAULTS, "mystic": 1.0}, mystic=False) for _ in range(50)]
+check("신비한 꽃: 새 게임에만 (5종 중 하나)", all(s["kind"] == "mystic" and s["ptype"] in DC.MYSTIC_TYPES for s in ms_new) and not any(s["kind"] == "mystic" for s in ms_old)
+      and len({s["ptype"] for s in ms_new}) == 5, str(ms_new[:3]))
+check("신비한 꽃 기본 확률 0.05% (한 종류 0.01%)", abs(DC.RATE_DEFAULTS["mystic"] - 0.0005) < 1e-9 and DC.GROW_HOURS["mystic"] == 360.0)
+check("관리 화면 확률에 신비한 꽃", "mystic" in client.get("/dotpot/api/admin/rates", headers=KEY).json()["rates"])
+check("관리 화면 확률에 만렙 능력·열매", all(k in client.get("/dotpot/api/admin/rates", headers=KEY).json()["rates"] for k in ("abil_two", "fruit_good", "fruit_dept", "fruit_luck")))
+check("열매 등급 합이 100% 넘으면 거절", client.post("/dotpot/api/admin/rates", json={"rates": {"fruit_rot": 0.5, "fruit_meh": 0.3, "fruit_good": 0.2, "fruit_dept": 0.1}}, headers=KEY).status_code == 400)
+
 # ---------- 배경 뽑기권 · 배경 뽑기 ----------
 rb0 = client.post("/dotpot/api/sync", json={"mail": 1}, headers=HM).json()
 check("처음 배경 뽑기권 0", rb0.get("bg_tickets") == 0, str(rb0)[:200])

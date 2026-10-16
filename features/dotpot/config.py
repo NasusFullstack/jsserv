@@ -27,18 +27,26 @@ BALANCE_MAX = 999
 
 # ---- 뽑기 확률: 기본값 (관리 화면 「확률」에서 바꾸면 DB 값이 우선 — 게임은 켤 때·뽑을 때 받아 보여 줌) ----
 # kiln_small·big·huge = 공방에서 나오는 화분 크기 비율 (셋의 합으로 나눠 씀, 기본은 고루)
-RATE_DEFAULTS = {"premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05,
-                 "kiln_small": 0.3333, "kiln_big": 0.3333, "kiln_huge": 0.3333}
-RATE_LIMITS = {"premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0),
-               "kiln_small": (0.0, 1.0), "kiln_big": (0.0, 1.0), "kiln_huge": (0.0, 1.0)}
-RATE_NAMES = {"premium": "고급 나무 (씨앗 꾸러미)", "tree": "묘목 · 나무 (고급이 아닐 때)",
+RATE_DEFAULTS = {"mystic": 0.0005, "premium": 0.05, "tree": 0.35, "rare": 0.05, "lux": 0.20, "fuse": 0.05, "kiln": 0.05,
+                 "kiln_small": 0.3333, "kiln_big": 0.3333, "kiln_huge": 0.3333,
+                 "abil_two": 0.02, "fruit_rot": 0.08, "fruit_meh": 0.22, "fruit_good": 0.12, "fruit_dept": 0.01, "fruit_luck": 0.01}
+# 만렙 능력·열매 값은 서버가 쓰지 않고 게임에 보내 줌 (게임이 켤 때·뽑을 때 받아 씀)
+RATE_LIMITS = {"mystic": (0.0, 0.05), "premium": (0.0, 0.5), "tree": (0.0, 1.0), "rare": (0.0, 0.5), "lux": (0.0, 1.0), "fuse": (0.0, 1.0), "kiln": (0.0, 1.0),
+               "kiln_small": (0.0, 1.0), "kiln_big": (0.0, 1.0), "kiln_huge": (0.0, 1.0),
+               "abil_two": (0.0, 1.0), "fruit_rot": (0.0, 1.0), "fruit_meh": (0.0, 1.0), "fruit_good": (0.0, 1.0), "fruit_dept": (0.0, 1.0), "fruit_luck": (0.0, 0.1)}
+RATE_NAMES = {"mystic": "신비한 꽃 1~4 · 생명의 꽃 (씨앗 꾸러미, 5종 합 — 한 종류는 1/5)", "premium": "고급 나무 (씨앗 꾸러미)", "tree": "묘목 · 나무 (고급이 아닐 때)",
               "rare": "신비한 씨앗·묘목 (고급이 아닐 때)", "lux": "고급 화분 (화분 뽑기)",
               "fuse": "고급 묘목 (의문의 상인 — 씨앗 3개)", "kiln": "고급 화분 (공방 — 화분 3개)",
-              "kiln_small": "공방 크기 비율 — 작은 화분", "kiln_big": "공방 크기 비율 — 큰 화분", "kiln_huge": "공방 크기 비율 — 아주 큰 화분"}
+              "kiln_small": "공방 크기 비율 — 작은 화분", "kiln_big": "공방 크기 비율 — 큰 화분", "kiln_huge": "공방 크기 비율 — 아주 큰 화분",
+              "abil_two": "만렙 능력 2개 (다 키운 식물마다)", "fruit_rot": "열매 등급 — 썩음", "fruit_meh": "열매 등급 — 그럭저럭",
+              "fruit_good": "열매 등급 — 좋음 (고급 열매 능력만큼 곱)", "fruit_dept": "열매 등급 — 백화점급 (고급 열매 능력만큼 곱)",
+              "fruit_luck": "열매 확률 + (만렙 식물 한 그루마다, 최대 30그루)"}
+FRUIT_GRADE_KEYS = ("fruit_rot", "fruit_meh", "fruit_good", "fruit_dept")   # 나머지가 「일반」
 KILN_SIZE_KEYS = ("kiln_small", "kiln_big", "kiln_huge")   # POT_SIZES 순서
 # 관리 화면 「확률」 묶음
-RATE_GROUPS = [["뽑기 (씨앗 꾸러미 · 화분 뽑기)", ["premium", "tree", "rare", "lux"]],
-               ["재조합 (의문의 상인 · 공방)", ["fuse", "kiln", "kiln_small", "kiln_big", "kiln_huge"]]]
+RATE_GROUPS = [["뽑기 (씨앗 꾸러미 · 화분 뽑기)", ["mystic", "premium", "tree", "rare", "lux"]],
+               ["재조합 (의문의 상인 · 공방)", ["fuse", "kiln", "kiln_small", "kiln_big", "kiln_huge"]],
+               ["만렙 능력 · 열매 (게임이 켤 때·뽑을 때 받아 씀)", ["abil_two", "fruit_rot", "fruit_meh", "fruit_good", "fruit_dept", "fruit_luck"]]]
 
 # ---- 의문의 상인(씨앗 3개 → 고른 씨앗 하나) · 공방(화분 3개 → 다시 구운 화분 하나) ----
 CRAFT_COUNT = 3
@@ -70,7 +78,8 @@ PREMIUM_TREES = {"pine": "", "rubber": "", "cherry": "spring", "ginkgo": "autumn
 SEASON_MONTHS = {"spring": (3, 4, 5), "autumn": (9, 10, 11), "winter": (12,)}
 
 # ---- 보상: 뽑은 뒤 이만큼(서버 시계, 시간)은 지나야 「다 키움」 보상 (게임은 켜 둔 시간만 자라므로 실제 시간은 더 걸림) ----
-GROW_HOURS = {"flower": 48.0, "tree": 72.0, "premium": 96.0}
+GROW_HOURS = {"flower": 48.0, "tree": 72.0, "premium": 96.0, "mystic": 360.0}   # mystic = 신비한 꽃·생명의 꽃 15일
+MYSTIC_TYPES = ("m1", "m2", "m3", "m4", "life")   # 신비한 꽃 1~4 · 생명의 꽃 (게임 1.5.1~ 이 draw 에 mystic=1 을 보낼 때만)
 GROW_SLACK = 0.45   # 가장 빠르면 건강 110% × 영양 넉넉 1.4 × 만렙 능력 성장 최대 +30% = 2.0배 (1/2.0 = 0.5) → 그보다 조금 여유
 
 # ---- 한도 ----
